@@ -1,0 +1,34 @@
+# .ci-fingerprints — 個人 target-specific 識別符清單（regex，每行一個）
+#
+# 這個檔案 .gitignore 掉，每個 contributor 自己維護。
+# 目的：確保你研究過的 target（品牌名、特定 hostname、具體 ID）不會意外進 repo。
+#
+# 用法：
+#   cp .ci-fingerprints.example .ci-fingerprints
+#   編輯 .ci-fingerprints 加入你自己的清單
+#   ./ci.sh 會自動讀取並 grep 所有 tracked files
+#
+# 格式：
+#   - 每行一個 regex（使用 grep -E extended regex）
+#   - # 開頭是註解
+#   - 空行忽略
+#
+# 範例（請替換成你自己的 — 不要把真的清單 commit）：
+
+# 品牌名
+# Watsons
+# eero
+# Ubiquiti
+
+# 具體 staging hostname 的 hash 部分
+# cmb8j9fjhz
+# apj4aswat1
+
+# 過去 PoC 產生的 GUID / 數字 ID
+# 8902db89-c503-4145
+# 695474668853
+
+# 完整 FQDN
+# insight\.eero\.com
+# rma\.svc\.ui\.com
+# mcp\.intercom\.com

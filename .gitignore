@@ -1,0 +1,66 @@
+# bbflow toolchain — ignore binaries, outputs, third-party source
+# （這些檔案只屬於本機工作環境，不進版本控制）
+
+# ── 下載的 binary ProjectDiscovery tools ───────────────────────
+httpx
+httpx.zip
+subfinder
+subfinder.zip
+nuclei
+nuclei.zip
+dnsx
+katana
+waybackurls
+gau
+ffuf
+amass
+feroxbuster
+
+# ── Third-party source (dumped / cloned repos) ─────────────────
+GitTools/
+GitHack/
+ci3_latest/
+ci3_latest.zip
+scrabble/
+vuln_scanner/
+
+# ── Hunter outputs / runtime artifacts ─────────────────────────
+# Each hunter creates ./<name>_out/ when run standalone
+*_out/
+hunters/*_out/
+jsecret_out/
+gkey_out/
+takeover_out/
+redirect_out/
+jwt_out/
+mcp_out/
+actuator_out/
+devops_out/
+envdata_out/
+sourcemap_out/
+cors_out/
+graphql_out/
+userenum_out/
+hybris_occ_out/
+git_out/
+nxdomain_out/
+
+# ── tmp / debug ────────────────────────────────────────────────
+/tmp/
+*.log
+*.tmp
+.extract_urls.py
+.dv_*
+.gk_*
+
+# ── Editor / OS ────────────────────────────────────────────────
+.DS_Store
+*.swp
+*~
+.idea/
+.vscode/
+
+# ── Personal config (not for version control) ─────────────────
+.ci-fingerprints       # personal target-specific fingerprint list
+.env                   # local env vars (REAL_TARGET etc.)
+

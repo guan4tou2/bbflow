@@ -1,0 +1,59 @@
+description: |
+  Bug Bounty Hunt Preset — v2.8.4
+  整合 subdomain enum + DNS takeover + cloud bucket + known secrets
+  來自實際 bug bounty 教訓（disclosed Hybris / OAuth / Spring Boot cases）
+
+  用法:
+    bbot -t target.com -p ~/.config/bbot/presets/bugbounty.yml
+    bbot -t targets.txt -p ~/.config/bbot/presets/bugbounty.yml
+    bbot -t targets.txt -p ~/.config/bbot/presets/bugbounty.yml --no-deps (已裝好 deps 後)
+
+flags:
+  - subdomain-enum     # 全量子域名枚舉（crt.sh/hackertarget/dnsx/subfinder 等 51 個模組）
+  - baddns             # DNS takeover 偵測（baddns/baddns_direct/baddns_zone）
+  - cloud-enum         # 雲端 bucket 枚舉（Amazon/Google/Firebase/Microsoft/DigitalOcean）
+
+modules:
+  - badsecrets         # HTTP response 裡的已知 secret patterns（public redirect_uri chain + Hybris）
+  - httpx              # 存活探測 + 技術識別
+  - sslcert            # SSL 憑證 → 額外子域名
+  - wayback            # Wayback Machine 歷史 URL
+
+output_modules:
+  - subdomains         # 乾淨子域名清單 → subdomains.txt
+  - txt                # 人類可讀完整輸出 → output.txt
+  - csv                # CSV 格式 → 可匯入 Excel
+  - json               # NDJSON 格式 → 可用 jq 過濾
+
+config:
+  dns:
+    threads: 100          # 加速 DNS 解析（預設 25）
+    brute_threads: 2000   # 暴力枚舉執行緒（預設 1000）
+    timeout: 5
+    retries: 1
+  web:
+    http_timeout: 10
+    httpx_timeout: 5
+    ssl_verify: false     # 忽略自簽憑證（滲透測試環境常見）
+    spider_distance: 1    # 爬蟲深度 1（避免太耗時）
+    spider_depth: 1
+    http_max_redirects: 5
+  scope:
+    strict: false         # 非嚴格模式：允許探索目標的子域名
+    report_distance: 1    # 報告距離目標 1 hop 以內的發現
+    search_distance: 1
+
+  # ── API 金鑰設定（有才填，沒有也能跑）──────────────────────────
+  # modules:
+  #   github:
+  #     api_key: "ghp_xxxxxxxxxxxx"      # GitHub → 找 commit 中的秘密
+  #   shodan_dns:
+  #     api_key: "xxxxxxxxxxxx"          # Shodan → 額外子域名
+  #   securitytrails:
+  #     api_key: "xxxxxxxxxxxx"          # SecurityTrails → 被動子域名
+  #   virustotal:
+  #     api_key: "xxxxxxxxxxxx"          # VirusTotal → 子域名
+  #   chaos:
+  #     api_key: "xxxxxxxxxxxx"          # ProjectDiscovery Chaos → 子域名
+  #   bevigil:
+  #     api_key: "xxxxxxxxxxxx"          # BeVigil → App 中找到的子域名
