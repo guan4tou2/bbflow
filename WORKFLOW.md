@@ -35,7 +35,7 @@ export OSMEDEUS_VPS="user@1.2.3.4"
 
 > `tools/hunt_all.sh` 已 deprecated，`bbflow` 是主入口。
 
-**16 個 hunters 對應的成功案例 / 已知 pattern：**
+**21 個 hunters 對應的成功案例 / 已知 pattern：**
 
 | Hunter | 驗證什麼 | 來源案例 |
 |--------|---------|---------|
@@ -55,6 +55,11 @@ export OSMEDEUS_VPS="user@1.2.3.4"
 | `hunt-mcp-oauth-scope.sh` | RFC 8414 OAuth discovery + MCP JSON-RPC probe + consent vs `MCP_TOKEN` 實際 write tool 差異 | MCP OAuth scope mismatch pattern |
 | `hunt-google-api-key.sh` | 對 `AIza*` key 測 16 個 Google 服務可用性 + 自動 severity hint | multi-service Google API key pattern ✅ 實測（Vision + Translate UNRESTRICTED）|
 | `hunt-nxdomain-corpus.sh` | 歷史 hostname 超集 → NXDOMAIN 過濾（待遇到 Host-header controllable proxy 時當 payload）| Starbucks writeup |
+| `hunt-param-fuzz.sh` | katana+gau+waybackurls URL 收集 → gf filter XSS/SQLi/SSRF → nuclei DAST templates 驗證 | DAST fuzzing |
+| `hunt-dalfox-xss.sh` | gf xss filter → dalfox 掃描（blind XSS 支援）+ payloads/xss-custom.txt | reflected/blind XSS |
+| `hunt-arjun-params.sh` | arjun GET/POST/JSON 隱藏參數探索 + SecLists burp-parameter-names | hidden param hunting |
+| `hunt-trufflehog-secrets.sh` | trufflehog git mode `--only-verified` 100+ detector：AWS/GitHub/Stripe/GCP/Azure | git history secret scan |
+| `hunt-ffuf-dirs.sh` | ffuf 三層 dir fuzzing：raft-medium + BB-ROI + 副檔名（.bak/.sql/.env/.git）| dir/file exposure |
 
 **單獨執行某個 hunter：**
 

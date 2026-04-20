@@ -29,6 +29,11 @@
 | `hunt-mcp-oauth-scope.sh` | **MCP OAuth scope mismatch pattern** | RFC 8414 OAuth discovery + MCP endpoint probe + JSON-RPC initialize + tools/list + `MCP_TOKEN` 認證後比對 consent screen 宣稱 scope vs 實際 write-level tool 差異 |
 | `hunt-hardcoded-js-secrets.sh` | **SPA hardcoded client secret pattern** | 對 live `.js` bundle grep 硬編碼密鑰（和 sourcemap hunter 互補，不需 .map）：AWS/AIza/GitHub/Stripe/Slack/JWT/Sentry/Mapbox/Twilio/clientSecret 等 19 種 pattern |
 | `hunt-nxdomain-corpus.sh` | **Starbucks NXDOMAIN**（External Writeups 2026） | 建立歷史 hostname 超集 → 過濾出 NXDOMAIN 候選 → 待遇到 Host-controllable proxy 時當 payload |
+| `hunt-param-fuzz.sh` | **DAST fuzzing pattern** | katana + gau + waybackurls URL 收集 → gf filter XSS/SQLi/SSRF → nuclei DAST templates 驗證 |
+| `hunt-dalfox-xss.sh` | **Reflected/Blind XSS pattern** | gf xss filter → dalfox 掃描（支援 blind XSS callback + cookie auth）+ payloads/xss-custom.txt |
+| `hunt-arjun-params.sh` | **Hidden parameter discovery** | arjun GET/POST/JSON 隱藏參數探索 + SecLists burp-parameter-names（支援認證 header）|
+| `hunt-trufflehog-secrets.sh` | **Git history secret scan** | trufflehog git 模式（`--only-verified`）掃 100+ detector：AWS/GitHub/Stripe/GCP/Azure key + config |
+| `hunt-ffuf-dirs.sh` | **Directory & file fuzzing** | ffuf 三層 dir fuzzing：raft-medium + BB-ROI wordlist + 副檔名（.bak/.sql/.env/.git）（支援 cookie auth）|
 
 ## 使用方式
 

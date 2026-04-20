@@ -69,8 +69,8 @@ http:
       - "{{BaseURL}}/api/v1/profile"
 
     headers:
-      # HS256 signed with secret "secret": {"sub":"1","role":"admin"}
-      Authorization: "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwicm9sZSI6ImFkbWluIn0.2kuHMlmgCOb8GKvxuCFPMQN9P4EiElCOXMTMr8cMN9k"
+      # HS256 signed with weak secret "secret": {"sub":"1","role":"admin"}
+      Authorization: "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwicm9sZSI6ImFkbWluIn0.2kuHMlmgCOb8GKvxuCFPMQN9P4EiElCOXMTMr8cMN9k" # FAKE-JWT test token
 
     matchers-condition: and
     matchers:
