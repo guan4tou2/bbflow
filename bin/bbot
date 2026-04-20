@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# tools/bin/bbot — wrapper that finds bbot regardless of install method
+# Priority: pipx > ~/.local/bin > venv inside tools/ > system PATH
+set -uo pipefail
+
+TOOLS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+for CANDIDATE in \
+  "$(pipx environment --value PIPX_LOCAL_VENVS 2>/dev/null)/bbot/bin/bbot" \
+  "$HOME/.local/bin/bbot" \
+  "$TOOLS_DIR/venv/bin/bbot" \
+  "$(command -v bbot 2>/dev/null || true)"; do
+  if [ -x "$CANDIDATE" ]; then
+    exec "$CANDIDATE" "$@"
+  fi
+done
+
+echo "bbot not found. Install: pipx install bbot" >&2
+exit 1

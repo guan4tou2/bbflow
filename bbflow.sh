@@ -21,13 +21,24 @@
 set -uo pipefail
 
 TOOLS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-BASE_DIR="$(cd "$TOOLS_DIR/.." && pwd)"
+
+# ── Workspace: where research/, reports/, etc. are stored ──────
+# Override with: export BBFLOW_WORKSPACE=/your/path
+# Default: current working directory ($PWD), so `cd ~/work && bbflow hunt t`
+# stores research at ~/work/research/
+BASE_DIR="${BBFLOW_WORKSPACE:-$(pwd)}"
+export BBFLOW_WORKSPACE="$BASE_DIR"
+
+# ── Prepend tools/bin to PATH so bundled binaries take priority ─
+# Place BBOT / Osmedeus wrappers in tools/bin/ to ship with repo
+export PATH="$TOOLS_DIR/bin:$PATH"
 
 # ── Dependencies ───────────────────────────────────────────────
-BBOT="$(command -v bbot 2>/dev/null || echo $HOME/.local/bin/bbot)"
-HTTPX="$TOOLS_DIR/httpx"; [ ! -x "$HTTPX" ] && HTTPX="$(command -v httpx 2>/dev/null || echo '')"
+# Bundled binaries (tools/bin/ or tools/) take priority over system PATH
+BBOT="$(command -v bbot 2>/dev/null || echo "$HOME/.local/bin/bbot")"
+HTTPX="$TOOLS_DIR/httpx";      [ ! -x "$HTTPX" ]     && HTTPX="$(command -v httpx 2>/dev/null || echo '')"
 SUBFINDER="$TOOLS_DIR/subfinder"; [ ! -x "$SUBFINDER" ] && SUBFINDER="$(command -v subfinder 2>/dev/null || echo '')"
-NUCLEI="$TOOLS_DIR/nuclei"; [ ! -x "$NUCLEI" ] && NUCLEI="$(command -v nuclei 2>/dev/null || echo '')"
+NUCLEI="$TOOLS_DIR/nuclei";    [ ! -x "$NUCLEI" ]    && NUCLEI="$(command -v nuclei 2>/dev/null || echo '')"
 NUCLEI_TEMPLATES="$TOOLS_DIR/nuclei-templates/bb-recon"
 NUCLEI_COMMUNITY="${NUCLEI_COMMUNITY:-$HOME/nuclei-templates}"
 NUCLEI_WORDFENCE="$TOOLS_DIR/nuclei-templates/nuclei-wordfence-cve"
@@ -92,6 +103,12 @@ ${B}Examples:${N}
   bbflow hunt --list hosts.txt --name my-prog --probe    # IP/domain/URL list 直打
   OSMEDEUS_VPS=user@1.2.3.4 bbflow recon target.example.com --osmedeus
 
+${B}Workspace:${N}
+  預設 research/ 建在執行 bbflow 的目錄（\$PWD）
+  覆蓋: export BBFLOW_WORKSPACE=/custom/path
+  Bundled tools (nuclei/httpx/subfinder): tools/
+  BBOT/Osmedeus wrappers: tools/bin/（放在 repo 裡即可）
+
 ${B}Directory layout:${N}
   research/<target>/
     SCOPE.md                       ← scope 定義（必須先手寫完整）
@@ -141,6 +158,11 @@ EOF
 # ── cmd: doctor ────────────────────────────────────────────────
 cmd_doctor() {
   echo "${B}== bbflow doctor ==${N}"
+  ok  "TOOLS_DIR     → $TOOLS_DIR"
+  ok  "BBFLOW_WORKSPACE → $BASE_DIR  (research/ + reports/ live here)"
+  [ -d "$TOOLS_DIR/bin" ] && ok "tools/bin/    → $(ls "$TOOLS_DIR/bin" | tr '\n' ' ')" \
+                          || info "tools/bin/    not found (create to bundle bbot/osmedeus wrappers)"
+  echo ""
   for TOOL in curl python3 bash dig sort sed awk grep; do
     if command -v "$TOOL" >/dev/null 2>&1; then ok "$TOOL"; else err "$TOOL (required)"; fi
   done
