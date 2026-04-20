@@ -1,0 +1,91 @@
+id: bb-fusion-variables-xml
+
+info:
+  name: Adobe ColdFusion / Fusion — variables.xml Hardcoded Credentials
+  author: guan4tou2
+  severity: high
+  description: |
+    Fuzzes subdomain/path patterns for variables.xml which may contain
+    hardcoded datasource credentials, API keys, and service passwords.
+    Pattern: subdomain.(target)/Fusion/FUZZ or /cf_scripts/Fusion/FUZZ
+    Directly exploitable: extract DB credentials → full data access.
+  reference:
+    - https://twitter.com/BugBountyTip
+  tags: bb-recon,coldfusion,adobe,credentials,exposure
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/Fusion/variables.xml"
+      - "{{BaseURL}}/cf_scripts/Fusion/variables.xml"
+      - "{{BaseURL}}/CFIDE/Fusion/variables.xml"
+      - "{{BaseURL}}/admin/Fusion/variables.xml"
+      - "{{BaseURL}}/app/Fusion/variables.xml"
+      - "{{BaseURL}}/web/Fusion/variables.xml"
+      - "{{BaseURL}}/api/Fusion/variables.xml"
+      - "{{BaseURL}}/portal/Fusion/variables.xml"
+      - "{{BaseURL}}/common/Fusion/variables.xml"
+      - "{{BaseURL}}/assets/Fusion/variables.xml"
+
+    stop-at-first-match: false
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+
+      - type: word
+        condition: or
+        words:
+          - '<variables>'
+          - '<variable'
+          - 'password'
+          - 'datasource'
+          - 'connectionString'
+          - 'apiKey'
+          - 'secretKey'
+          - '<cfcomponent'
+        part: body
+
+    extractors:
+      - type: regex
+        name: credentials
+        regex:
+          - '<variable\s+name="[^"]*(?:password|secret|key|token|credential)[^"]*"\s+value="([^"]+)"'
+          - '<password>([^<]+)</password>'
+        part: body
+
+---
+id: bb-coldfusion-admin-exposed
+
+info:
+  name: Adobe ColdFusion Admin Panel — Exposed
+  author: guan4tou2
+  severity: high
+  description: |
+    ColdFusion Administrator panel accessible. May allow RCE via scheduled tasks,
+    datasource enumeration, and password retrieval.
+  tags: bb-recon,coldfusion,adobe,admin
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/CFIDE/administrator/index.cfm"
+      - "{{BaseURL}}/CFIDE/administrator/"
+      - "{{BaseURL}}/cfide/administrator/index.cfm"
+      - "{{BaseURL}}/cf_scripts/scripts/ajax/package/"
+
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+
+      - type: word
+        condition: or
+        words:
+          - 'ColdFusion Administrator'
+          - 'cfadmin'
+          - 'CFIDE'
+          - 'Adobe ColdFusion'
+        part: body
