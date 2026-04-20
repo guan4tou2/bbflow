@@ -458,7 +458,17 @@ NORM
 
   local DIR="$BASE_DIR/research/$T"
   local LIVE="$DIR/bbot/live_hosts.txt"
-  [ ! -s "$LIVE" ] && { err "no live hosts (run: bbflow recon $T  or  bbflow hunt --list <file>)"; exit 1; }
+
+  # Auto-seed live_hosts.txt from target name when no recon / --list was run
+  if [ ! -s "$LIVE" ] && [ -z "$LIST_FILE" ]; then
+    mkdir -p "$DIR/bbot"
+    local SEED
+    [[ "$T" =~ ^https?:// ]] && SEED="$T" || SEED="https://$T"
+    echo "$SEED" > "$LIVE"
+    info "no recon data — hunting single host: $SEED"
+  fi
+
+  [ ! -s "$LIVE" ] && { err "no live hosts — this should not happen"; exit 1; }
   mkdir -p "$DIR/hunters"
 
   local REPORT="$DIR/HUNTERS_REPORT_$(date +%Y%m%d_%H%M).md"
