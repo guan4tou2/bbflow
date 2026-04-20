@@ -35,6 +35,11 @@ KATANA="$(command -v katana 2>/dev/null || echo '')"
 GAU="$(command -v gau 2>/dev/null || echo '')"
 WAYBACK="$(command -v waybackurls 2>/dev/null || echo '')"
 URO="$(command -v uro 2>/dev/null || echo '')"
+GF="$(command -v gf 2>/dev/null || echo '')"
+DALFOX="$(command -v dalfox 2>/dev/null || echo '')"
+FFUF="$(command -v ffuf 2>/dev/null || echo '')"
+ARJUN="$(command -v arjun 2>/dev/null || echo '')"
+TRUFFLEHOG="$(command -v trufflehog 2>/dev/null || echo '')"
 
 # ── Colors ─────────────────────────────────────────────────────
 R=$'\e[31m'; G=$'\e[32m'; Y=$'\e[33m'; B=$'\e[34m'; M=$'\e[35m'; C=$'\e[36m'; N=$'\e[0m'
@@ -104,9 +109,13 @@ ${B}21 Hunters (對應 confirmed bounty 案例 + 高 ROI pattern):${N}
   nuclei-wp        Wordfence WordPress CVE templates（1000+）   [需 bbflow nuclei-update]
                   → WP plugin/theme CVE 直接 PoC
   nuclei-ai        projectdiscovery/nuclei-templates-ai CVE     [需 bbflow nuclei-update]
-  param-fuzz       URL/param discovery + nuclei DAST fuzzing    [需 katana + gau/waybackurls + uro]
-                  → katana crawl + gau 歷史 URL → uro 去重 →
+  param-fuzz       URL/param discovery + nuclei DAST fuzzing    [需 katana+gau+uro+gf]
+                  → katana + gau + gf 分類 → nuclei DAST
                     XSS/SQLi/SSRF/LFI/SSTI/CRLF/Open-redirect
+  dalfox-xss       XSS deep scan (dalfox + gf xss filter)       [需 dalfox+katana+gf]
+  arjun-params     隱藏 parameter discovery (GET/POST/JSON)      [需 arjun]
+  trufflehog       git history deep secret scan (100+ detectors)[需 trufflehog]
+  ffuf-dirs        Directory/file fuzzing (bug-bounty path list) [需 ffuf]
 EOF
 }
 
@@ -133,11 +142,16 @@ cmd_doctor() {
   fi
   [ -f "$TOOLS_DIR/bbot_preset_bugbounty.yml" ] && ok "bbot preset" || warn "bbot preset missing"
   echo ""
-  echo "${B}Param Fuzzing Tools:${N}"
-  [ -n "$KATANA" ] && ok "katana → $KATANA" || warn "katana not found (param-fuzz crawl degraded; brew install katana)"
+  echo "${B}Param Fuzzing & XSS Tools:${N}"
+  [ -n "$KATANA" ] && ok "katana → $KATANA" || warn "katana not found (brew install katana)"
   [ -n "$GAU" ] && ok "gau → $GAU" || warn "gau not found (go install github.com/lc/gau/v2/cmd/gau@latest)"
   [ -n "$WAYBACK" ] && ok "waybackurls → $WAYBACK" || warn "waybackurls not found (fallback: CDX API)"
   [ -n "$URO" ] && ok "uro → $URO" || warn "uro not found (pip3 install uro --break-system-packages)"
+  [ -n "$GF" ] && ok "gf → $GF ($(ls "$HOME/.gf"/*.json 2>/dev/null | wc -l | tr -d ' ') patterns)" || warn "gf not found (go install github.com/tomnomnom/gf@latest)"
+  [ -n "$DALFOX" ] && ok "dalfox → $DALFOX" || warn "dalfox not found (brew install dalfox)"
+  [ -n "$FFUF" ] && ok "ffuf → $FFUF" || warn "ffuf not found (brew install ffuf)"
+  [ -n "$ARJUN" ] && ok "arjun → $ARJUN" || warn "arjun not found (pip3 install arjun --break-system-packages)"
+  [ -n "$TRUFFLEHOG" ] && ok "trufflehog → $TRUFFLEHOG" || warn "trufflehog not found (brew install trufflehog)"
   if [ -d "$NUCLEI_COMMUNITY/dast/vulnerabilities" ]; then
     local NDAST
     NDAST=$(find "$NUCLEI_COMMUNITY/dast/vulnerabilities" -name "*.yaml" 2>/dev/null | wc -l | tr -d ' ')
@@ -598,6 +612,95 @@ EOF
       local TOTAL_PARAMS
       TOTAL_PARAMS=$(cat "$PF_OH"/*/param_urls.txt 2>/dev/null | wc -l | tr -d ' ')
       echo "- 0 DAST findings ($TOTAL_PARAMS parameterized URLs crawled)" >> "$REPORT"
+    fi
+  fi
+
+  # ── dalfox-xss: XSS deep scan ───────────────────────────────
+  if want dalfox-xss; then
+    info "hunter: dalfox-xss (XSS + gf filter)"
+    local DFX_OH="$DIR/hunters/dalfox-xss"; mkdir -p "$DFX_OH"
+    echo "" >> "$REPORT"; echo "## dalfox-xss" >> "$REPORT"
+    while IFS= read -r HOST; do
+      [ -z "$HOST" ] && continue
+      local SLUG; SLUG=$(echo "$HOST" | sed -E 's|^https?://||' | tr '/:.' '_')
+      export OUT_DIR="$DFX_OH/$SLUG"; mkdir -p "$OUT_DIR"
+      "$TOOLS_DIR/hunters/hunt-dalfox-xss.sh" "$HOST" 2>/dev/null \
+        | grep "^🔴" >> "$DFX_OH/dalfox_hits.txt" || true
+    done < "$LIVE"
+    if [ -s "$DFX_OH/dalfox_hits.txt" ]; then
+      local DFX_COUNT; DFX_COUNT=$(wc -l < "$DFX_OH/dalfox_hits.txt" | tr -d ' ')
+      echo "- $DFX_COUNT XSS findings → $DFX_OH/dalfox_hits.txt" >> "$REPORT"
+      while read L; do echo "- $L" >> "$REPORT"; done < "$DFX_OH/dalfox_hits.txt"
+      ok "  dalfox-xss hits: $DFX_COUNT"
+    else
+      echo "- (no XSS found)" >> "$REPORT"
+    fi
+  fi
+
+  # ── arjun-params: hidden param discovery ─────────────────────
+  if want arjun-params; then
+    info "hunter: arjun-params (hidden GET/POST/JSON params)"
+    local AJ_OH="$DIR/hunters/arjun-params"; mkdir -p "$AJ_OH"
+    echo "" >> "$REPORT"; echo "## arjun-params" >> "$REPORT"
+    while IFS= read -r HOST; do
+      [ -z "$HOST" ] && continue
+      local SLUG; SLUG=$(echo "$HOST" | sed -E 's|^https?://||' | tr '/:.' '_')
+      export OUT_DIR="$AJ_OH/$SLUG"; mkdir -p "$OUT_DIR"
+      "$TOOLS_DIR/hunters/hunt-arjun-params.sh" "$HOST" 2>/dev/null \
+        | grep "^🔴" >> "$AJ_OH/arjun_hits.txt" || true
+    done < "$LIVE"
+    if [ -s "$AJ_OH/arjun_hits.txt" ]; then
+      local AJ_COUNT; AJ_COUNT=$(wc -l < "$AJ_OH/arjun_hits.txt" | tr -d ' ')
+      echo "- $AJ_COUNT endpoints with hidden params → $AJ_OH/arjun_hits.txt" >> "$REPORT"
+      while read L; do echo "- $L" >> "$REPORT"; done < "$AJ_OH/arjun_hits.txt"
+      ok "  arjun-params hits: $AJ_COUNT"
+    else
+      echo "- (no hidden params found)" >> "$REPORT"
+    fi
+  fi
+
+  # ── trufflehog: git history deep secret scan ─────────────────
+  if want trufflehog; then
+    info "hunter: trufflehog (git history 100+ secret detectors)"
+    local TFH_OH="$DIR/hunters/trufflehog"; mkdir -p "$TFH_OH"
+    echo "" >> "$REPORT"; echo "## trufflehog" >> "$REPORT"
+    while IFS= read -r HOST; do
+      [ -z "$HOST" ] && continue
+      local SLUG; SLUG=$(echo "$HOST" | sed -E 's|^https?://||' | tr '/:.' '_')
+      export OUT_DIR="$TFH_OH/$SLUG"; mkdir -p "$OUT_DIR"
+      "$TOOLS_DIR/hunters/hunt-trufflehog-secrets.sh" "$HOST" 2>/dev/null \
+        | grep "^🔴" >> "$TFH_OH/trufflehog_hits.txt" || true
+    done < "$LIVE"
+    if [ -s "$TFH_OH/trufflehog_hits.txt" ]; then
+      local TFH_COUNT; TFH_COUNT=$(wc -l < "$TFH_OH/trufflehog_hits.txt" | tr -d ' ')
+      echo "- $TFH_COUNT secrets found → $TFH_OH/trufflehog_hits.txt" >> "$REPORT"
+      while read L; do echo "- $L" >> "$REPORT"; done < "$TFH_OH/trufflehog_hits.txt"
+      ok "  trufflehog hits: $TFH_COUNT"
+    else
+      echo "- (no verified secrets found)" >> "$REPORT"
+    fi
+  fi
+
+  # ── ffuf-dirs: directory/file fuzzing ─────────────────────────
+  if want ffuf-dirs; then
+    info "hunter: ffuf-dirs (BB high-ROI path list)"
+    local FF_OH="$DIR/hunters/ffuf-dirs"; mkdir -p "$FF_OH"
+    echo "" >> "$REPORT"; echo "## ffuf-dirs" >> "$REPORT"
+    while IFS= read -r HOST; do
+      [ -z "$HOST" ] && continue
+      local SLUG; SLUG=$(echo "$HOST" | sed -E 's|^https?://||' | tr '/:.' '_')
+      export OUT_DIR="$FF_OH/$SLUG"; mkdir -p "$OUT_DIR"
+      "$TOOLS_DIR/hunters/hunt-ffuf-dirs.sh" "$HOST" 2>/dev/null \
+        | grep "^[🔴🟡]" >> "$FF_OH/ffuf_hits.txt" || true
+    done < "$LIVE"
+    if [ -s "$FF_OH/ffuf_hits.txt" ]; then
+      local FF_COUNT; FF_COUNT=$(grep -c "^🔴" "$FF_OH/ffuf_hits.txt" 2>/dev/null || echo 0)
+      local FF_TOTAL; FF_TOTAL=$(wc -l < "$FF_OH/ffuf_hits.txt" | tr -d ' ')
+      echo "- $FF_TOTAL paths found ($FF_COUNT critical) → $FF_OH/ffuf_hits.txt" >> "$REPORT"
+      while read L; do echo "- $L" >> "$REPORT"; done < "$FF_OH/ffuf_hits.txt"
+      ok "  ffuf-dirs hits: $FF_TOTAL (critical: $FF_COUNT)"
+    else
+      echo "- (no interesting paths found)" >> "$REPORT"
     fi
   fi
 

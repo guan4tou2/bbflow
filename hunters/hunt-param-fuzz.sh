@@ -33,6 +33,8 @@ KATANA="$(command -v katana 2>/dev/null || echo '')"
 GAU="$(command -v gau 2>/dev/null || echo '')"
 WAYBACK="$(command -v waybackurls 2>/dev/null || echo '')"
 URO="$(command -v uro 2>/dev/null || echo '')"
+GF="$(command -v gf 2>/dev/null || echo '')"
+QSREPLACE="$(command -v qsreplace 2>/dev/null || echo '')"
 NUCLEI_DAST="$HOME/nuclei-templates/dast/vulnerabilities"
 
 DOMAIN=$(echo "$TARGET" | sed -E 's|^https?://||' | cut -d/ -f1 | cut -d: -f1)
@@ -77,6 +79,18 @@ grep -E '\?' "$ALL_URLS" \
   | sort -u \
   > "$OUT_DIR/param_raw.txt" || true
 
+# ── Step 3b: gf pattern extraction（按漏洞類型分類）────────
+if [ -n "$GF" ]; then
+  for PATTERN in sqli ssrf lfi ssti xss redirect; do
+    [ -f "$HOME/.gf/${PATTERN}.json" ] || continue
+    grep -E '\?' "$OUT_DIR/param_raw.txt" \
+      | "$GF" "$PATTERN" 2>/dev/null \
+      > "$OUT_DIR/gf_${PATTERN}.txt" || true
+    COUNT=$(wc -l < "$OUT_DIR/gf_${PATTERN}.txt" | tr -d ' ')
+    [ "$COUNT" -gt 0 ] && echo "→ gf $PATTERN: $COUNT URLs" >&2
+  done
+fi
+
 PARAM_COUNT=$(wc -l < "$OUT_DIR/param_raw.txt" | tr -d ' ')
 
 if [ "$PARAM_COUNT" -eq 0 ]; then
@@ -107,22 +121,40 @@ fi
 FUZZ_OUT="$OUT_DIR/fuzz_results.txt"
 > "$FUZZ_OUT"
 
-"$NUCLEI" -l "$PARAM_URLS" \
-  -t "$NUCLEI_DAST/xss/reflected-xss.yaml" \
-  -t "$NUCLEI_DAST/sqli/sqli-error-based.yaml" \
-  -t "$NUCLEI_DAST/sqli/time-based-sqli.yaml" \
-  -t "$NUCLEI_DAST/ssrf/response-ssrf.yaml" \
-  -t "$NUCLEI_DAST/ssrf/blind-ssrf.yaml" \
-  -t "$NUCLEI_DAST/lfi/linux-lfi-fuzz.yaml" \
-  -t "$NUCLEI_DAST/lfi/windows-lfi-fuzz.yaml" \
-  -t "$NUCLEI_DAST/ssti/reflection-ssti.yaml" \
-  -t "$NUCLEI_DAST/redirect" \
-  -t "$NUCLEI_DAST/crlf" \
-  -dast \
-  -rate-limit 8 \
-  -timeout 15 \
-  -silent \
-  -o "$FUZZ_OUT" 2>/dev/null || true
+# 使用 gf 分類的 URL 做針對性掃描（更精準，減少 false positive）
+run_dast() {
+  local URLS="$1"; local TEMPLATES="$2"
+  [ -s "$URLS" ] || return
+  "$NUCLEI" -l "$URLS" $TEMPLATES \
+    -dast -rate-limit 8 -timeout 15 -silent \
+    -o "$FUZZ_OUT" 2>/dev/null || true
+}
+
+# 全量掃描（兜底）
+run_dast "$PARAM_URLS" \
+  "-t $NUCLEI_DAST/xss/reflected-xss.yaml \
+   -t $NUCLEI_DAST/sqli/sqli-error-based.yaml \
+   -t $NUCLEI_DAST/sqli/time-based-sqli.yaml \
+   -t $NUCLEI_DAST/ssrf/response-ssrf.yaml \
+   -t $NUCLEI_DAST/ssrf/blind-ssrf.yaml \
+   -t $NUCLEI_DAST/lfi/linux-lfi-fuzz.yaml \
+   -t $NUCLEI_DAST/lfi/windows-lfi-fuzz.yaml \
+   -t $NUCLEI_DAST/ssti/reflection-ssti.yaml \
+   -t $NUCLEI_DAST/redirect \
+   -t $NUCLEI_DAST/crlf"
+
+# gf 針對性補掃（若有分類結果）
+[ -s "$OUT_DIR/gf_sqli.txt" ] && \
+  run_dast "$OUT_DIR/gf_sqli.txt" \
+    "-t $NUCLEI_DAST/sqli/sqli-error-based.yaml -t $NUCLEI_DAST/sqli/time-based-sqli.yaml"
+[ -s "$OUT_DIR/gf_ssrf.txt" ] && \
+  run_dast "$OUT_DIR/gf_ssrf.txt" \
+    "-t $NUCLEI_DAST/ssrf/response-ssrf.yaml -t $NUCLEI_DAST/ssrf/blind-ssrf.yaml"
+[ -s "$OUT_DIR/gf_lfi.txt" ] && \
+  run_dast "$OUT_DIR/gf_lfi.txt" \
+    "-t $NUCLEI_DAST/lfi/linux-lfi-fuzz.yaml -t $NUCLEI_DAST/lfi/windows-lfi-fuzz.yaml"
+[ -s "$OUT_DIR/gf_ssti.txt" ] && \
+  run_dast "$OUT_DIR/gf_ssti.txt" "-t $NUCLEI_DAST/ssti/reflection-ssti.yaml"
 
 # ── Step 5: output hits ───────────────────────────────────────
 if [ -s "$FUZZ_OUT" ]; then
