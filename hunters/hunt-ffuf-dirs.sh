@@ -23,12 +23,22 @@ FFUF="$(command -v ffuf 2>/dev/null || echo '')"
 COOKIE="${FFUF_COOKIE:-}"
 EXTRA_HEADER="${FFUF_HEADER:-}"
 
-# Wordlist 優先序
-SECLISTS="$HOME/Tools/SecLists"
-WL_RAFT_MEDIUM="$SECLISTS/Discovery/Web-Content/raft-medium-files.txt"
-WL_RAFT_DIRS="$SECLISTS/Discovery/Web-Content/raft-medium-directories.txt"
-WL_API="$SECLISTS/Discovery/Web-Content/api/api-endpoints-res.txt"
-WL_PARAMS="$SECLISTS/Discovery/Web-Content/burp-parameter-names.txt"
+# Wordlist 優先序 — 繼承 bbflow export 或自動偵測
+if [ -z "${SECLISTS:-}" ]; then
+  for _sl in \
+    "$HOME/Tools/SecLists" \
+    "$(brew --prefix seclists 2>/dev/null)/share/seclists" \
+    "/opt/homebrew/share/seclists" \
+    "/usr/local/share/seclists" \
+    "/usr/share/seclists"; do
+    [ -d "$_sl/Discovery/Web-Content" ] && SECLISTS="$_sl" && break
+  done
+  SECLISTS="${SECLISTS:-}"
+fi
+WL_RAFT_MEDIUM="${SECLISTS:+$SECLISTS/Discovery/Web-Content/raft-medium-files.txt}"
+WL_RAFT_DIRS="${SECLISTS:+$SECLISTS/Discovery/Web-Content/raft-medium-directories.txt}"
+WL_API="${SECLISTS:+$SECLISTS/Discovery/Web-Content/api/api-endpoints-res.txt}"
+WL_PARAMS="${SECLISTS:+$SECLISTS/Discovery/Web-Content/burp-parameter-names.txt}"
 
 # ── BB 高 ROI 自訂 wordlist ──────────────────────────────
 BB_WL="$OUT_DIR/bb_paths.txt"

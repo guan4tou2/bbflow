@@ -29,8 +29,9 @@ HTTPX="$TOOLS_DIR/httpx"; [ ! -x "$HTTPX" ] && HTTPX="$(command -v httpx 2>/dev/
 SUBFINDER="$TOOLS_DIR/subfinder"; [ ! -x "$SUBFINDER" ] && SUBFINDER="$(command -v subfinder 2>/dev/null || echo '')"
 NUCLEI="$TOOLS_DIR/nuclei"; [ ! -x "$NUCLEI" ] && NUCLEI="$(command -v nuclei 2>/dev/null || echo '')"
 NUCLEI_TEMPLATES="$TOOLS_DIR/nuclei-templates/bb-recon"
-NUCLEI_COMMUNITY="$HOME/nuclei-templates"
+NUCLEI_COMMUNITY="${NUCLEI_COMMUNITY:-$HOME/nuclei-templates}"
 NUCLEI_WORDFENCE="$TOOLS_DIR/nuclei-templates/nuclei-wordfence-cve"
+export NUCLEI_COMMUNITY
 KATANA="$(command -v katana 2>/dev/null || echo '')"
 GAU="$(command -v gau 2>/dev/null || echo '')"
 WAYBACK="$(command -v waybackurls 2>/dev/null || echo '')"
@@ -40,6 +41,21 @@ DALFOX="$(command -v dalfox 2>/dev/null || echo '')"
 FFUF="$(command -v ffuf 2>/dev/null || echo '')"
 ARJUN="$(command -v arjun 2>/dev/null || echo '')"
 TRUFFLEHOG="$(command -v trufflehog 2>/dev/null || echo '')"
+
+# ── SecLists: auto-detect across common install locations ──────
+# export so hunters inherit without re-detecting
+if [ -z "${SECLISTS:-}" ]; then
+  for _sl in \
+    "$HOME/Tools/SecLists" \
+    "$(brew --prefix seclists 2>/dev/null)/share/seclists" \
+    "/opt/homebrew/share/seclists" \
+    "/usr/local/share/seclists" \
+    "/usr/share/seclists"; do
+    [ -d "$_sl/Discovery/Web-Content" ] && SECLISTS="$_sl" && break
+  done
+  SECLISTS="${SECLISTS:-}"
+fi
+export SECLISTS
 
 # ── Colors ─────────────────────────────────────────────────────
 R=$'\e[31m'; G=$'\e[32m'; Y=$'\e[33m'; B=$'\e[34m'; M=$'\e[35m'; C=$'\e[36m'; N=$'\e[0m'
@@ -159,14 +175,14 @@ cmd_doctor() {
   else
     warn "nuclei DAST templates not found (run: nuclei -update-templates)"
   fi
-  local SECLISTS="$HOME/Tools/SecLists"
-  if [ -d "$SECLISTS/Discovery/Web-Content" ]; then
+  if [ -n "$SECLISTS" ]; then
     local WL_COUNT
     WL_COUNT=$(find "$SECLISTS/Discovery/Web-Content" -name "*.txt" 2>/dev/null | wc -l | tr -d ' ')
     ok "SecLists → $SECLISTS ($WL_COUNT wordlists)"
   else
-    warn "SecLists not found at $SECLISTS — ffuf/arjun will use built-in lists"
-    warn "  install: git clone --depth=1 https://github.com/danielmiessler/SecLists.git $SECLISTS"
+    warn "SecLists not found — ffuf/arjun will use built-in lists only"
+    warn "  install (custom): git clone --depth=1 --filter=blob:none --sparse https://github.com/danielmiessler/SecLists.git ~/Tools/SecLists && cd ~/Tools/SecLists && git sparse-checkout set Discovery/Web-Content Fuzzing/XSS"
+    warn "  install (brew):   brew install seclists"
   fi
   if [ -f "$TOOLS_DIR/payloads/xss-custom.txt" ]; then
     ok "xss-custom.txt → $TOOLS_DIR/payloads/xss-custom.txt"
@@ -182,6 +198,15 @@ cmd_doctor() {
   echo "${B}Optional env:${N}"
   [ -n "${OSMEDEUS_VPS:-}" ] && ok "OSMEDEUS_VPS=$OSMEDEUS_VPS" || warn "OSMEDEUS_VPS not set (--osmedeus will fail)"
   [ -n "${EXISTING_EMAIL:-}" ] && ok "EXISTING_EMAIL=$EXISTING_EMAIL" || warn "EXISTING_EMAIL not set (user-enum will guess admin@domain)"
+  echo ""
+  echo "${B}Auth / advanced env (export before bbflow hunt):${N}"
+  [ -n "${DALFOX_BLIND_URL:-}" ]  && ok "DALFOX_BLIND_URL=$DALFOX_BLIND_URL"    || warn "DALFOX_BLIND_URL  — blind XSS callback (e.g. https://xxx.oast.fun)"
+  [ -n "${DALFOX_COOKIE:-}" ]     && ok "DALFOX_COOKIE set"                     || warn "DALFOX_COOKIE     — authenticated XSS scan (e.g. session=abc123)"
+  [ -n "${DALFOX_HEADERS:-}" ]    && ok "DALFOX_HEADERS set"                    || warn "DALFOX_HEADERS    — extra headers for dalfox (e.g. Authorization: Bearer xxx)"
+  [ -n "${FFUF_COOKIE:-}" ]       && ok "FFUF_COOKIE set"                       || warn "FFUF_COOKIE       — authenticated dir fuzzing"
+  [ -n "${FFUF_HEADER:-}" ]       && ok "FFUF_HEADER set"                       || warn "FFUF_HEADER       — extra header for ffuf (e.g. Authorization: Bearer xxx)"
+  [ -n "${ARJUN_HEADERS:-}" ]     && ok "ARJUN_HEADERS set"                     || warn "ARJUN_HEADERS     — authenticated param discovery"
+  [ -n "${ARJUN_COOKIES:-}" ]     && ok "ARJUN_COOKIES set"                     || warn "ARJUN_COOKIES     — cookie for arjun"
 }
 
 # ── cmd: list ─────────────────────────────────────────────────

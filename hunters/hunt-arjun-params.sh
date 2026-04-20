@@ -25,9 +25,20 @@ ARJUN="$(command -v arjun 2>/dev/null || echo '')"
 EXTRA_HEADERS="${ARJUN_HEADERS:-}"
 COOKIES="${ARJUN_COOKIES:-}"
 
-# 字典優先序: SecLists > arjun 內建
-SECLISTS_PARAMS="$HOME/Tools/SecLists/Discovery/Web-Content/burp-parameter-names.txt"
-ASSETNOTE_PARAMS="$HOME/Tools/SecLists/Discovery/Web-Content/api/api-endpoints.txt"
+# 字典優先序: SecLists > arjun 內建 — 繼承 bbflow export 或自動偵測
+if [ -z "${SECLISTS:-}" ]; then
+  for _sl in \
+    "$HOME/Tools/SecLists" \
+    "$(brew --prefix seclists 2>/dev/null)/share/seclists" \
+    "/opt/homebrew/share/seclists" \
+    "/usr/local/share/seclists" \
+    "/usr/share/seclists"; do
+    [ -d "$_sl/Discovery/Web-Content" ] && SECLISTS="$_sl" && break
+  done
+  SECLISTS="${SECLISTS:-}"
+fi
+SECLISTS_PARAMS="${SECLISTS:+$SECLISTS/Discovery/Web-Content/burp-parameter-names.txt}"
+ASSETNOTE_PARAMS="${SECLISTS:+$SECLISTS/Discovery/Web-Content/api/api-endpoints.txt}"
 
 ARJUN_FLAGS=(
   "-u" "$TARGET"

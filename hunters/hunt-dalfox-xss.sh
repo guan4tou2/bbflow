@@ -41,7 +41,19 @@ COOKIE="${DALFOX_COOKIE:-}"
 EXTRA_HEADERS="${DALFOX_HEADERS:-}"
 # 自訂 payload 檔案（一行一個 payload）
 CUSTOM_PAYLOADS="${DALFOX_PAYLOADS:-$TOOLS_DIR/payloads/xss-custom.txt}"
-SECLISTS_XSS="$HOME/Tools/SecLists/Fuzzing/XSS/XSS-Jhaddix.txt"
+# 繼承 bbflow export 或自動偵測
+if [ -z "${SECLISTS:-}" ]; then
+  for _sl in \
+    "$HOME/Tools/SecLists" \
+    "$(brew --prefix seclists 2>/dev/null)/share/seclists" \
+    "/opt/homebrew/share/seclists" \
+    "/usr/local/share/seclists" \
+    "/usr/share/seclists"; do
+    [ -d "$_sl/Discovery/Web-Content" ] && SECLISTS="$_sl" && break
+  done
+  SECLISTS="${SECLISTS:-}"
+fi
+SECLISTS_XSS="${SECLISTS:+$SECLISTS/Fuzzing/XSS/XSS-Jhaddix.txt}"
 
 # ── URL collection ──────────────────────────────────────────
 ALL_URLS="$OUT_DIR/all_urls.txt"

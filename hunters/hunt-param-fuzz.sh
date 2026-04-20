@@ -35,7 +35,9 @@ WAYBACK="$(command -v waybackurls 2>/dev/null || echo '')"
 URO="$(command -v uro 2>/dev/null || echo '')"
 GF="$(command -v gf 2>/dev/null || echo '')"
 QSREPLACE="$(command -v qsreplace 2>/dev/null || echo '')"
-NUCLEI_DAST="$HOME/nuclei-templates/dast/vulnerabilities"
+# 繼承 bbflow export 或 fallback 到預設路徑
+NUCLEI_DAST="${NUCLEI_COMMUNITY:+$NUCLEI_COMMUNITY/dast/vulnerabilities}"
+NUCLEI_DAST="${NUCLEI_DAST:-$HOME/nuclei-templates/dast/vulnerabilities}"
 
 DOMAIN=$(echo "$TARGET" | sed -E 's|^https?://||' | cut -d/ -f1 | cut -d: -f1)
 ALL_URLS="$OUT_DIR/all_urls.txt"
