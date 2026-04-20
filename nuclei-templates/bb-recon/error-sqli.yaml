@@ -1,0 +1,92 @@
+id: bb-error-based-sqli
+
+info:
+  name: Error-Based SQL Injection — GET Parameters
+  author: guan4tou2
+  severity: high
+  description: |
+    Detects error-based SQL injection by injecting payloads into common GET
+    parameters and matching database error messages in the response.
+    Supports MySQL, PostgreSQL, MSSQL, OracleDB, SQLite.
+  tags: bb-recon,sqli,sql-injection,error-based
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}"
+
+    payloads:
+      sqli_param:
+        - id
+        - page
+        - cat
+        - item
+        - product
+        - user
+        - uid
+        - type
+        - name
+        - search
+        - q
+        - query
+        - pid
+        - cid
+        - article
+        - news
+        - sid
+        - view
+        - key
+
+    fuzzing:
+      - part: query
+        type: postfix
+        mode: single
+        fuzz:
+          - "{{sqli_param}}=1'"
+          - "{{sqli_param}}=1\""
+          - "{{sqli_param}}=1`"
+          - "{{sqli_param}}=1)"
+          - "{{sqli_param}}=1 AND 1=CONVERT(int,CHAR(49))"
+          - "{{sqli_param}}=1 AND EXTRACTVALUE(1,CONCAT(0x7e,(SELECT version())))"
+
+    matchers-condition: and
+    matchers:
+      - type: regex
+        condition: or
+        regex:
+          - "SQL syntax.*MySQL"
+          - "Warning.*mysql_"
+          - "MySQLSyntaxErrorException"
+          - "valid MySQL result"
+          - "check the manual that (corresponds to|fits) your MySQL server"
+          - "com\\.mysql\\.jdbc\\.exceptions"
+          - "Zend_Db_(Adapter|Statement)_Mysqli_Exception"
+          - "SQLSTATE\\[\\d+\\].*?\\[MySQL\\]"
+          - "PostgreSQL.*ERROR"
+          - "Warning.*\\bpg_"
+          - "valid PostgreSQL result"
+          - "Npgsql\\."
+          - "ERROR:\\s+syntax error at or near"
+          - "PG::SyntaxError"
+          - "Microsoft OLE DB Provider for ODBC Drivers"
+          - "\\[Microsoft\\]\\[ODBC SQL Server Driver\\]"
+          - "\\[Microsoft\\]\\[ODBC Driver.*\\] SQL Server"
+          - "Unclosed quotation mark after the character string"
+          - "Microsoft SQL Native Client error"
+          - "ORA-[0-9]{5}"
+          - "Oracle error"
+          - "Oracle.*Driver"
+          - "Warning.*\\boci_"
+          - "SQLite/JDBCDriver"
+          - "SQLite\\.Exception"
+          - "System\\.Data\\.SQLite\\.SQLiteException"
+          - "SQLITE_ERROR"
+          - "sqlite3\\.OperationalError"
+        part: body
+
+      - type: status
+        negative: true
+        status:
+          - 404
+          - 429
+          - 503

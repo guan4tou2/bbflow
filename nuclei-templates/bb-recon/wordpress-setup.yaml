@@ -1,0 +1,89 @@
+id: bb-wordpress-setup-config
+
+info:
+  name: WordPress Setup-Config Disclosure
+  author: guan4tou2
+  severity: high
+  description: |
+    wp-setup-config.php accessible → database credentials exposed during setup.
+    Also detects wp-config.php backup files left by editors/migrations.
+    Directly exploitable: extract DB host/user/password → full DB access.
+  tags: bb-recon,wordpress,config,exposure,credentials
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/wp-admin/setup-config.php"
+      - "{{BaseURL}}/wp-config.php.bak"
+      - "{{BaseURL}}/wp-config.php.old"
+      - "{{BaseURL}}/wp-config.php.orig"
+      - "{{BaseURL}}/wp-config.php~"
+      - "{{BaseURL}}/wp-config.php.save"
+      - "{{BaseURL}}/wp-config.bak"
+      - "{{BaseURL}}/wp-config.txt"
+      - "{{BaseURL}}/wp-config.php.dist"
+      - "{{BaseURL}}/wp-config-sample.php"
+
+    stop-at-first-match: false
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+
+      - type: word
+        condition: or
+        words:
+          - 'DB_PASSWORD'
+          - 'DB_HOST'
+          - 'DB_NAME'
+          - 'DB_USER'
+          - 'table_prefix'
+          - 'WordPress Database'
+          - 'setup-config'
+        part: body
+
+    extractors:
+      - type: regex
+        name: db_credentials
+        regex:
+          - "define\\s*\\(\\s*'DB_(HOST|USER|PASSWORD|NAME)'\\s*,\\s*'([^']+)'\\s*\\)"
+        part: body
+
+---
+id: bb-wordpress-xmlrpc
+
+info:
+  name: WordPress XML-RPC Enabled
+  author: guan4tou2
+  severity: medium
+  description: |
+    WordPress xmlrpc.php enabled. Allows brute-force amplification (system.multicall),
+    user enumeration, and potential authenticated RCE via pingback.
+  tags: bb-recon,wordpress,xmlrpc
+
+http:
+  - method: POST
+    path:
+      - "{{BaseURL}}/xmlrpc.php"
+
+    body: |
+      <?xml version="1.0" encoding="UTF-8"?>
+      <methodCall><methodName>system.listMethods</methodName><params></params></methodCall>
+
+    headers:
+      Content-Type: text/xml
+
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+
+      - type: word
+        words:
+          - 'system.multicall'
+          - 'wp.getUsersBlogs'
+          - 'metaWeblog'
+        condition: or
+        part: body

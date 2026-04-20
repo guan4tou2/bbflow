@@ -1,0 +1,95 @@
+id: bb-vault-unauth
+
+info:
+  name: HashiCorp Vault — Unauthenticated Access
+  author: guan4tou2
+  severity: critical
+  description: |
+    HashiCorp Vault accessible without authentication. /v1/sys/init or /v1/auth
+    readable → enumerate secrets engines, steal credentials, access secrets.
+    Directly exploitable if initialized with root token readable.
+  tags: bb-recon,vault,hashicorp,unauth,secrets
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/v1/sys/health"
+      - "{{BaseURL}}/v1/sys/init"
+      - "{{BaseURL}}/v1/sys/seal-status"
+      - "{{BaseURL}}/v1/secret/data"
+      - "{{BaseURL}}/v1/secret"
+
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+
+      - type: word
+        condition: or
+        words:
+          - '"initialized"'
+          - '"sealed"'
+          - '"cluster_name"'
+          - '"version"'
+        part: body
+
+      - type: word
+        negative: true
+        words:
+          - '"errors"'
+          - 'permission denied'
+          - 'missing client token'
+        part: body
+
+---
+id: bb-consul-unauth
+
+info:
+  name: HashiCorp Consul — Unauthenticated Access
+  author: guan4tou2
+  severity: high
+  description: |
+    HashiCorp Consul accessible without ACL token. /v1/kv/ KV store may contain
+    service credentials, /v1/catalog/services leaks internal topology.
+    Directly exploitable: extract secrets, register rogue services.
+  tags: bb-recon,consul,hashicorp,unauth,secrets
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/v1/catalog/services"
+      - "{{BaseURL}}/v1/kv/?recurse=true"
+      - "{{BaseURL}}/v1/agent/self"
+      - "{{BaseURL}}/v1/status/leader"
+      - "{{BaseURL}}/ui/"
+
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+
+      - type: word
+        condition: or
+        words:
+          - '"consul"'
+          - '"datacenter"'
+          - '"LanConfig"'
+          - 'consul-ui'
+        part: body
+
+      - type: word
+        negative: true
+        words:
+          - 'ACL not found'
+          - 'Permission denied'
+          - 'Missing token'
+        part: body
+
+    extractors:
+      - type: regex
+        name: services
+        regex:
+          - '"([a-zA-Z0-9_-]+)"\s*:\s*\['
+        part: body

@@ -30,6 +30,7 @@ SUBFINDER="$TOOLS_DIR/subfinder"; [ ! -x "$SUBFINDER" ] && SUBFINDER="$(command 
 NUCLEI="$TOOLS_DIR/nuclei"; [ ! -x "$NUCLEI" ] && NUCLEI="$(command -v nuclei 2>/dev/null || echo '')"
 NUCLEI_TEMPLATES="$TOOLS_DIR/nuclei-templates/bb-recon"
 NUCLEI_COMMUNITY="$HOME/nuclei-templates"
+NUCLEI_WORDFENCE="$TOOLS_DIR/nuclei-templates/nuclei-wordfence-cve"
 
 # ── Colors ─────────────────────────────────────────────────────
 R=$'\e[31m'; G=$'\e[32m'; Y=$'\e[33m'; B=$'\e[34m'; M=$'\e[35m'; C=$'\e[36m'; N=$'\e[0m'
@@ -54,6 +55,7 @@ ${B}Usage:${N}
   bbflow list
   bbflow report <target>
   bbflow scope <target>
+  bbflow nuclei-update             更新官方 PD templates + clone Wordfence CVE repo
 
 ${B}Examples:${N}
   bbflow doctor
@@ -71,7 +73,7 @@ ${B}Directory layout:${N}
     nxdomain/nxdomain_corpus.txt   ← NXDOMAIN payload 候選
     HUNTERS_REPORT_YYYYMMDD_HHMM.md ← 彙總報告
 
-${B}18 Hunters (對應 confirmed bounty 案例 + 高 ROI pattern):${N}
+${B}21 Hunters (對應 confirmed bounty 案例 + 高 ROI pattern):${N}
   hybris-occ       SAP Hybris OCC default creds + cart IDOR    [SAP Hybris OCC pattern]
   envdata          window.envData + AWS/Google/Sentry keys     [SPA inline window config pattern]
   sourcemap        .js.map → sourcesContent 密鑰 grep          [SPA inline config / multi-brand]
@@ -88,12 +90,16 @@ ${B}18 Hunters (對應 confirmed bounty 案例 + 高 ROI pattern):${N}
   open-redirect    redirect param + bypass 變體 + OAuth chain  [OAuth redirect_uri chain (public pattern)]
   jwt              decode + alg:none + weak HS256 + exp 檢查   [generic]
   nxdomain         歷史 hostname 超集 → Host-header payload    [Starbucks writeup]
-  nuclei           bb-recon templates (直接可利用漏洞)          [需 nuclei binary]
-                  → default-creds / jwt-none / s3-listable /
-                    git-exposure / devops-unauth / oauth-redirect /
-                    graphql-introspection / subdomain-takeover
-  nuclei-secrets   官方 projectdiscovery 123 token + 206 config templates [需 ~/nuclei-templates/]
-                  → AWS/GCP/GitHub/Slack/Stripe keys + .env/.git/config 洩漏
+  nuclei           bb-recon templates 26 個（直接可利用漏洞）    [需 nuclei binary]
+                  → firebase/k8s/elastic/terraform/docker/backup/
+                    php-debug/sqli/crlf/ssrf/wordpress/hashicorp
+  nuclei-secrets   官方 PD tokens(123) + configs(206)          [需 ~/nuclei-templates/]
+                  → AWS/GCP/GitHub/Slack/Stripe + .env/config
+  nuclei-panels    官方 PD exposed-panels (DevOps/DB/Vault 面板) [需 ~/nuclei-templates/]
+                  → Redis/RabbitMQ/Vault/Consul/Kibana/phpMyAdmin
+  nuclei-wp        Wordfence WordPress CVE templates（1000+）   [需 bbflow nuclei-update]
+                  → WP plugin/theme CVE 直接 PoC
+  nuclei-ai        projectdiscovery/nuclei-templates-ai CVE     [需 bbflow nuclei-update]
 EOF
 }
 
@@ -462,9 +468,122 @@ EOF
     fi
   fi
 
+  # ── nuclei-panels: 官方 exposed-panels (Redis/RabbitMQ/Vault/Consul/...) ──
+  if want nuclei-panels; then
+    if [ -z "$NUCLEI" ]; then
+      warn "nuclei not found, skipping nuclei-panels"
+    elif [ ! -d "$NUCLEI_COMMUNITY/http/exposed-panels" ]; then
+      warn "nuclei-community not found (run: nuclei -update-templates)"
+    else
+      info "hunter: nuclei-panels (官方 exposed-panels — DevOps/DB/Vault/Console)"
+      local NP_OH="$DIR/hunters/nuclei-panels"
+      mkdir -p "$NP_OH"
+      local NP_OUT="$NP_OH/panels_results.txt"
+      > "$NP_OUT"
+      $NUCLEI -l "$LIVE" \
+        -t "$NUCLEI_COMMUNITY/http/exposed-panels" \
+        -rate-limit 5 \
+        -timeout 10 \
+        -silent \
+        -o "$NP_OUT" 2>/dev/null || true
+      echo "" >> "$REPORT"
+      echo "## nuclei-panels" >> "$REPORT"
+      if [ -s "$NP_OUT" ]; then
+        local NP_COUNT
+        NP_COUNT=$(wc -l < "$NP_OUT" | tr -d ' ')
+        echo "- $NP_COUNT findings → $NP_OUT" >> "$REPORT"
+        while IFS= read -r line; do
+          local sev tmpl url
+          sev=$(echo "$line" | grep -oE '\[(critical|high|medium|info)\]' | head -1 | tr -d '[]')
+          tmpl=$(echo "$line" | grep -oE '^\[[^]]+\]' | head -1 | tr -d '[]')
+          url=$(echo "$line" | awk '{print $NF}')
+          echo "- 🔴 PANEL [$sev] $tmpl → $url" >> "$REPORT"
+        done < "$NP_OUT"
+        ok "  nuclei-panels hits: $NP_COUNT"
+      else
+        echo "- (no panel findings)" >> "$REPORT"
+      fi
+    fi
+  fi
+
+  # ── nuclei-wp: Wordfence WordPress CVE templates ──────────────
+  if want nuclei-wp; then
+    if [ -z "$NUCLEI" ]; then
+      warn "nuclei not found, skipping nuclei-wp"
+    elif [ ! -d "$NUCLEI_WORDFENCE" ]; then
+      warn "nuclei-wordfence not found at $NUCLEI_WORDFENCE (run: bbflow nuclei-update)"
+    else
+      info "hunter: nuclei-wp (Wordfence WordPress CVE templates)"
+      local NW_OH="$DIR/hunters/nuclei-wp"
+      mkdir -p "$NW_OH"
+      local NW_OUT="$NW_OH/wp_results.txt"
+      > "$NW_OUT"
+      $NUCLEI -l "$LIVE" \
+        -t "$NUCLEI_WORDFENCE" \
+        -rate-limit 3 \
+        -timeout 15 \
+        -silent \
+        -o "$NW_OUT" 2>/dev/null || true
+      echo "" >> "$REPORT"
+      echo "## nuclei-wp (Wordfence CVE)" >> "$REPORT"
+      if [ -s "$NW_OUT" ]; then
+        local NW_COUNT
+        NW_COUNT=$(wc -l < "$NW_OUT" | tr -d ' ')
+        echo "- $NW_COUNT findings → $NW_OUT" >> "$REPORT"
+        while IFS= read -r line; do
+          local sev tmpl url
+          sev=$(echo "$line" | grep -oE '\[(critical|high|medium)\]' | head -1 | tr -d '[]')
+          tmpl=$(echo "$line" | grep -oE '^\[[^]]+\]' | head -1 | tr -d '[]')
+          url=$(echo "$line" | awk '{print $NF}')
+          echo "- 🔴 WP-CVE [$sev] $tmpl → $url" >> "$REPORT"
+        done < "$NW_OUT"
+        ok "  nuclei-wp hits: $NW_COUNT"
+      else
+        echo "- (no WordPress CVE findings)" >> "$REPORT"
+      fi
+    fi
+  fi
+
   ok "report → $REPORT"
   echo ""
   grep "^- 🔴" "$REPORT" 2>/dev/null | head -20 || true
+}
+
+# ── cmd: nuclei-update ────────────────────────────────────────
+cmd_nuclei_update() {
+  echo "${B}== bbflow nuclei-update ==${N}"
+
+  # 1. 更新官方 projectdiscovery nuclei-templates
+  if [ -n "$NUCLEI" ]; then
+    info "updating official nuclei-templates..."
+    $NUCLEI -update-templates 2>&1 | tail -3
+    ok "official templates updated → $NUCLEI_COMMUNITY"
+  else
+    warn "nuclei not found, skipping official update"
+  fi
+
+  # 2. Clone/update topscoder/nuclei-wordfence-cve
+  if [ -d "$NUCLEI_WORDFENCE/.git" ]; then
+    info "updating nuclei-wordfence-cve..."
+    git -C "$NUCLEI_WORDFENCE" pull --quiet 2>&1 | tail -2
+    WF_COUNT=$(find "$NUCLEI_WORDFENCE" -name "*.yaml" 2>/dev/null | wc -l | tr -d ' ')
+    ok "wordfence templates updated → $WF_COUNT templates"
+  elif command -v git >/dev/null 2>&1; then
+    info "cloning nuclei-wordfence-cve..."
+    git clone --quiet --depth=1 https://github.com/topscoder/nuclei-wordfence-cve.git "$NUCLEI_WORDFENCE" 2>&1 | tail -2
+    WF_COUNT=$(find "$NUCLEI_WORDFENCE" -name "*.yaml" 2>/dev/null | wc -l | tr -d ' ')
+    ok "wordfence cloned → $WF_COUNT templates at $NUCLEI_WORDFENCE"
+  else
+    warn "git not found, cannot clone wordfence templates"
+  fi
+
+  echo ""
+  echo "${B}Template inventory:${N}"
+  [ -d "$NUCLEI_TEMPLATES" ] && ok "bb-recon custom → $(ls "$NUCLEI_TEMPLATES"/*.yaml 2>/dev/null | wc -l | tr -d ' ') templates"
+  [ -d "$NUCLEI_COMMUNITY/http/exposures/tokens" ] && ok "PD tokens → $(ls "$NUCLEI_COMMUNITY/http/exposures/tokens"/*/*.yaml 2>/dev/null | wc -l | tr -d ' ')"
+  [ -d "$NUCLEI_COMMUNITY/http/exposures/configs" ] && ok "PD configs → $(ls "$NUCLEI_COMMUNITY/http/exposures/configs"/*.yaml 2>/dev/null | wc -l | tr -d ' ')"
+  [ -d "$NUCLEI_COMMUNITY/http/exposed-panels" ] && ok "PD panels → $(ls "$NUCLEI_COMMUNITY/http/exposed-panels"/*.yaml "$NUCLEI_COMMUNITY/http/exposed-panels"/*/*.yaml 2>/dev/null | wc -l | tr -d ' ')"
+  [ -d "$NUCLEI_WORDFENCE" ] && ok "Wordfence WP CVE → $(find "$NUCLEI_WORDFENCE" -name "*.yaml" 2>/dev/null | wc -l | tr -d ' ')"
 }
 
 # ── cmd: flow ────────────────────────────────────────────────
@@ -596,17 +715,18 @@ cmd_dedupe() {
 # ── Main dispatch ────────────────────────────────────────────
 SUB="${1:-help}"; shift 2>/dev/null || true
 case "$SUB" in
-  doctor)  cmd_doctor;;
-  init)    cmd_init "$@";;
-  recon)   cmd_recon "$@";;
-  hunt)    cmd_hunt "$@";;
-  flow)    cmd_flow "$@";;
-  status)  cmd_status "$@";;
-  list)    cmd_list;;
-  report)  cmd_report "$@";;
-  scope)   cmd_scope "$@";;
-  test)    cmd_test;;
-  dedupe)  cmd_dedupe "$@";;
+  doctor)         cmd_doctor;;
+  init)           cmd_init "$@";;
+  recon)          cmd_recon "$@";;
+  hunt)           cmd_hunt "$@";;
+  flow)           cmd_flow "$@";;
+  status)         cmd_status "$@";;
+  list)           cmd_list;;
+  report)         cmd_report "$@";;
+  scope)          cmd_scope "$@";;
+  test)           cmd_test;;
+  dedupe)         cmd_dedupe "$@";;
+  nuclei-update)  cmd_nuclei_update;;
   help|-h|--help|"") usage;;
   *) err "unknown subcommand: $SUB"; usage; exit 1;;
 esac

