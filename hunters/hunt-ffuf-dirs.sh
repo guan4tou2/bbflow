@@ -18,7 +18,12 @@ OUT_DIR="${OUT_DIR:-/tmp/bb-ffuf-$$}"
 mkdir -p "$OUT_DIR"
 
 FFUF="$(command -v ffuf 2>/dev/null || echo '')"
-[ -z "$FFUF" ] && { echo "✗ ffuf not found (brew install ffuf)"; exit 0; }
+FEROX="$(command -v feroxbuster 2>/dev/null || echo '')"
+
+if [ -z "$FFUF" ] && [ -z "$FEROX" ]; then
+  echo "✗ ffuf/feroxbuster not found (go install github.com/ffuf/ffuf/v2@latest)"
+  exit 0
+fi
 
 COOKIE="${FFUF_COOKIE:-}"
 EXTRA_HEADER="${FFUF_HEADER:-}"
@@ -150,30 +155,61 @@ BASE_FLAGS=(
 [ -n "$COOKIE" ] && BASE_FLAGS+=("-H" "Cookie: $COOKIE")
 [ -n "$EXTRA_HEADER" ] && BASE_FLAGS+=("-H" "$EXTRA_HEADER")
 
-# ── Layer 1: BB high-ROI list ──────────────────────────
-"$FFUF" \
-  -u "${TARGET}/FUZZ" \
-  -w "$BB_WL" \
-  "${BASE_FLAGS[@]}" \
-  -of json -o "$OUT_DIR/ffuf_bb.json" 2>/dev/null || true
-
-# ── Layer 2: SecLists raft-medium (if available) ───────
-if [ -f "$WL_RAFT_MEDIUM" ]; then
+if [ -n "$FFUF" ]; then
+  # ── ffuf: Layer 1 BB high-ROI ───────────────────────
   "$FFUF" \
     -u "${TARGET}/FUZZ" \
-    -w "$WL_RAFT_MEDIUM" \
+    -w "$BB_WL" \
     "${BASE_FLAGS[@]}" \
-    -of json -o "$OUT_DIR/ffuf_raft.json" 2>/dev/null || true
-fi
+    -of json -o "$OUT_DIR/ffuf_bb.json" 2>/dev/null || true
 
-# ── Layer 3: API endpoints (if available) ──────────────
-if [ -f "$WL_API" ]; then
-  "$FFUF" \
-    -u "${TARGET}/FUZZ" \
-    -w "$WL_API" \
-    "${BASE_FLAGS[@]}" \
-    -mc "200,201,204" \
-    -of json -o "$OUT_DIR/ffuf_api.json" 2>/dev/null || true
+  # ── ffuf: Layer 2 SecLists raft-medium ──────────────
+  if [ -f "$WL_RAFT_MEDIUM" ]; then
+    "$FFUF" \
+      -u "${TARGET}/FUZZ" \
+      -w "$WL_RAFT_MEDIUM" \
+      "${BASE_FLAGS[@]}" \
+      -of json -o "$OUT_DIR/ffuf_raft.json" 2>/dev/null || true
+  fi
+
+  # ── ffuf: Layer 3 API endpoints ─────────────────────
+  if [ -f "$WL_API" ]; then
+    "$FFUF" \
+      -u "${TARGET}/FUZZ" \
+      -w "$WL_API" \
+      "${BASE_FLAGS[@]}" \
+      -mc "200,201,204" \
+      -of json -o "$OUT_DIR/ffuf_api.json" 2>/dev/null || true
+  fi
+
+elif [ -n "$FEROX" ]; then
+  # ── feroxbuster fallback (recursive, Rust) ───────────
+  FEROX_FLAGS=( "--silent" "--auto-tune" "--threads" "20" "--timeout" "10"
+                "--status-codes" "200,201,204,301,302,307,401,403,405"
+                "--rate-limit" "15" )
+  [ -n "$COOKIE" ] && FEROX_FLAGS+=("--cookies" "$COOKIE")
+  [ -n "$EXTRA_HEADER" ] && FEROX_FLAGS+=("--headers" "$EXTRA_HEADER")
+  [ -f "$WL_RAFT_MEDIUM" ] && FEROX_FLAGS+=("--wordlist" "$WL_RAFT_MEDIUM")
+
+  "$FEROX" \
+    --url "$TARGET" \
+    "${FEROX_FLAGS[@]}" \
+    --output "$OUT_DIR/ferox_out.txt" 2>/dev/null || true
+
+  # Convert feroxbuster output to ffuf-like JSON for unified parser
+  python3 - "$OUT_DIR/ferox_out.txt" "$OUT_DIR/ffuf_bb.json" <<'CONV' 2>/dev/null || true
+import json, sys, re
+results = []
+try:
+    for line in open(sys.argv[1]):
+        m = re.match(r'(\d{3})\s+\S+\s+\S+\s+\S+\s+(https?://\S+)', line)
+        if m:
+            results.append({"status": int(m.group(1)), "url": m.group(2),
+                            "length": 0, "words": 0})
+except Exception:
+    pass
+json.dump({"results": results}, open(sys.argv[2], "w"))
+CONV
 fi
 
 # ── Parse all results ──────────────────────────────────

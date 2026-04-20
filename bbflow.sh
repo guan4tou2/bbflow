@@ -474,11 +474,14 @@ NORM
   local REPORT="$DIR/HUNTERS_REPORT_$(date +%Y%m%d_%H%M).md"
   local LIVE_N=$(wc -l < "$LIVE" | tr -d ' ')
 
+  local SCOPE_LINE=""
+  [ -f "$DIR/SCOPE.md" ] && SCOPE_LINE="Scope: $DIR/SCOPE.md"
+
   cat > "$REPORT" <<EOF
 # Hunters Report — $T
 Date: $(date '+%Y-%m-%d %H:%M')
 Live hosts: $LIVE_N
-Scope: $DIR/SCOPE.md
+${SCOPE_LINE}
 
 EOF
 
@@ -524,6 +527,7 @@ EOF
   run_hunter devops-unauth "$TOOLS_DIR/hunters/hunt-devops-unauth.sh"        host
   run_hunter actuator-deep "$TOOLS_DIR/hunters/hunt-actuator-deep.sh"        host
   run_hunter mcp-oauth     "$TOOLS_DIR/hunters/hunt-mcp-oauth-scope.sh"      host
+  run_hunter jwt           "$TOOLS_DIR/hunters/hunt-jwt.sh"                  host
   run_hunter open-redirect "$TOOLS_DIR/hunters/hunt-open-redirect.sh"        host
   # subdomain-takeover: feed individual hostnames (dig CNAME), skip live_hosts loop
   if want takeover; then
@@ -820,6 +824,16 @@ EOF
   fi
 
   # ── ffuf-dirs: directory/file fuzzing ─────────────────────────
+  if want portscan; then
+    info "hunter: portscan (rustscan → nmap service detection)"
+    local OH="$DIR/hunters/portscan"
+    mkdir -p "$OH"
+    export OUT_DIR="$OH"
+    while IFS= read -r host; do
+      "$TOOLS_DIR/hunters/hunt-portscan.sh" "$host" >> "$REPORT" 2>/dev/null || true
+    done < "$LIVE"
+  fi
+
   if want ffuf-dirs; then
     info "hunter: ffuf-dirs (BB high-ROI path list)"
     local FF_OH="$DIR/hunters/ffuf-dirs"; mkdir -p "$FF_OH"

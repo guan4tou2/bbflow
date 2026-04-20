@@ -190,6 +190,38 @@ else
 fi
 check_and_install "dalfox" "command -v dalfox" "$DFX_INST" "XSS scanner (blind + reflected)"
 
+# feroxbuster (recursive dir fuzzing fallback)
+if [ "$PKG" = "brew" ]; then
+  FEROX_INST="brew install feroxbuster"
+elif [ "$OS" = "Linux" ]; then
+  FEROX_INST='curl -sL https://raw.githubusercontent.com/epi052/feroxbuster/main/install-nix.sh | sudo bash -s /usr/local/bin'
+else
+  FEROX_INST=""
+fi
+[ -n "$FEROX_INST" ] && \
+  check_and_install "feroxbuster" "command -v feroxbuster" "$FEROX_INST" "recursive dir fuzzing (ffuf fallback)"
+
+# nmap + rustscan (port scan + service detection)
+case "$PKG" in
+  apt)    NMAP_INST="sudo apt install -y nmap";;
+  dnf)    NMAP_INST="sudo dnf install -y nmap";;
+  pacman) NMAP_INST="sudo pacman -S --noconfirm nmap";;
+  brew)   NMAP_INST="brew install nmap";;
+  *)      NMAP_INST="";;
+esac
+[ -n "$NMAP_INST" ] && \
+  check_and_install "nmap" "command -v nmap" "$NMAP_INST" "port/service detection"
+
+if [ "$OS" = "Linux" ]; then
+  RUST_INST='curl -sL https://raw.githubusercontent.com/RustScan/RustScan/master/install.sh | bash'
+elif [ "$PKG" = "brew" ]; then
+  RUST_INST="brew install rustscan"
+else
+  RUST_INST=""
+fi
+[ -n "$RUST_INST" ] && \
+  check_and_install "rustscan" "command -v rustscan" "$RUST_INST" "fast port discovery (feeds nmap)"
+
 # arjun (Python)
 check_and_install "arjun" "command -v arjun" \
   "pip_install arjun" "hidden parameter discovery"

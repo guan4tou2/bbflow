@@ -244,7 +244,8 @@ Bundled binaries：
 | `dalfox-xss` | dalfox + gf filter（blind XSS 支援） | reflected/blind XSS |
 | `arjun-params` | 隱藏 GET/POST/JSON parameter discovery | hidden param hunting |
 | `trufflehog` | git history 100+ detector secret scan | `--only-verified` |
-| `ffuf-dirs` | 3 層 dir fuzzing + BB-ROI wordlist | dir/file exposure |
+| `ffuf-dirs` | 3 層 dir fuzzing + BB-ROI wordlist；feroxbuster fallback | dir/file exposure |
+| `portscan` | rustscan → nmap service detection；Docker API/Redis/ES/Mongo/Consul 自動標 🔴 | port scan + service detection |
 
 ✅ = 對真實目標實測重現。詳見 [`hunters/README.md`](hunters/README.md)。
 

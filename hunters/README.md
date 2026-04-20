@@ -33,7 +33,8 @@
 | `hunt-dalfox-xss.sh` | **Reflected/Blind XSS pattern** | gf xss filter → dalfox 掃描（支援 blind XSS callback + cookie auth）+ payloads/xss-custom.txt |
 | `hunt-arjun-params.sh` | **Hidden parameter discovery** | arjun GET/POST/JSON 隱藏參數探索 + SecLists burp-parameter-names（支援認證 header）|
 | `hunt-trufflehog-secrets.sh` | **Git history secret scan** | trufflehog git 模式（`--only-verified`）掃 100+ detector：AWS/GitHub/Stripe/GCP/Azure key + config |
-| `hunt-ffuf-dirs.sh` | **Directory & file fuzzing** | ffuf 三層 dir fuzzing：raft-medium + BB-ROI wordlist + 副檔名（.bak/.sql/.env/.git）（支援 cookie auth）|
+| `hunt-ffuf-dirs.sh` | **Directory & file fuzzing** | ffuf 三層 dir fuzzing：raft-medium + BB-ROI wordlist + 副檔名（.bak/.sql/.env/.git）（支援 cookie auth；無 ffuf 自動 fallback 到 feroxbuster）|
+| `hunt-portscan.sh` | **Port scan + service detection** | rustscan（快速 port 發現）→ nmap（service/version）；高風險服務：Docker API / Redis / Elasticsearch / MongoDB / Consul 等自動標 🔴 |
 
 ## 使用方式
 

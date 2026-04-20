@@ -84,7 +84,8 @@ bbflow nuclei-update                  # 更新 PD templates + Wordfence CVE
 | `hunt-dalfox-xss.sh` | gf xss filter → dalfox 掃描（blind XSS 支援）+ payloads/xss-custom.txt | reflected/blind XSS |
 | `hunt-arjun-params.sh` | arjun GET/POST/JSON 隱藏參數探索 + SecLists burp-parameter-names | hidden param hunting |
 | `hunt-trufflehog-secrets.sh` | trufflehog git mode `--only-verified` 100+ detector：AWS/GitHub/Stripe/GCP/Azure | git history secret scan |
-| `hunt-ffuf-dirs.sh` | ffuf 三層 dir fuzzing：raft-medium + BB-ROI + 副檔名（.bak/.sql/.env/.git）| dir/file exposure |
+| `hunt-ffuf-dirs.sh` | ffuf 三層 dir fuzzing：raft-medium + BB-ROI + 副檔名（.bak/.sql/.env/.git）；feroxbuster fallback | dir/file exposure |
+| `hunt-portscan.sh` | rustscan → nmap service detection；自動標記高風險服務（Docker API/Redis/ES/Mongo/Consul）| port scan + service detection |
 
 **單獨執行某個 hunter：**
 
