@@ -47,7 +47,6 @@ section(){ echo ""; echo "${C}== $* ==${N}"; }
 # ── 1. Bash syntax on all hunter + bbflow + install + ci scripts ──
 section "bash syntax"
 for f in "$TOOLS_DIR"/bbflow.sh "$TOOLS_DIR"/install.sh "$TOOLS_DIR"/ci.sh \
-         "$TOOLS_DIR"/auto_hunt.sh "$TOOLS_DIR"/hunt_all.sh \
          "$TOOLS_DIR"/hunters/hunt-*.sh; do
   [ ! -f "$f" ] && continue
   if bash -n "$f" 2>/dev/null; then
@@ -78,19 +77,23 @@ done
 
 # ── 3. bbflow doctor ─────────────────────────────────────────
 section "bbflow doctor"
+HUNTER_COUNT=$(ls "$TOOLS_DIR"/hunters/hunt-*.sh 2>/dev/null | wc -l | tr -d ' ')
 if "$TOOLS_DIR/bbflow.sh" doctor 2>&1 | grep -q "✗ hunt-"; then
   fail "doctor: some hunters not executable"
 else
-  pass "doctor: all 16 hunters present + executable"
+  pass "doctor: all $HUNTER_COUNT hunters present + executable"
 fi
 
 # ── 4. bbflow test (regression null-case) ─────────────────────
 if [ "$FAST" = "0" ]; then
   section "bbflow test (regression null-case)"
-  if "$TOOLS_DIR/bbflow.sh" test 2>&1 | tail -3 | grep -q "all 14 null-case hunters passed"; then
-    pass "regression test: 14/14 null case 0 FP"
+  TEST_OUT=$("$TOOLS_DIR/bbflow.sh" test 2>&1 | tail -3)
+  if echo "$TEST_OUT" | grep -qE "all [0-9]+ null-case hunters passed"; then
+    NPASS=$(echo "$TEST_OUT" | grep -oE "all [0-9]+ null-case" | grep -oE "[0-9]+")
+    pass "regression test: $NPASS/$NPASS null case 0 FP"
   else
     fail "regression test: some hunter produced unexpected hits"
+    echo "$TEST_OUT" | sed 's/^/    /'
   fi
 else
   section "bbflow test"

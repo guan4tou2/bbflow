@@ -2,7 +2,7 @@
 
 統一的 bug bounty 偵察 + pattern hunter 工具鏈。**零 LLM 依賴**，純 `bash + curl + python3 stdlib`。
 
-BBOT / Osmedeus 負責 recon，21 個 pattern hunter 負責驗證。完全獨立執行，不依賴特定資料夾結構。
+BBOT / Osmedeus 負責 recon，22 個 pattern hunter 負責驗證。完全獨立執行，不依賴特定資料夾結構。
 
 ---
 
@@ -145,7 +145,7 @@ bbflow flow target.com
 
 # 或分開跑
 bbflow recon target.com          # BBOT subdomain enum + live probe
-bbflow hunt target.com           # 全 21 hunters
+bbflow hunt target.com           # 全 22 hunters
 bbflow hunt target.com --only cors,graphql,envdata   # 指定 hunters
 ```
 
@@ -216,7 +216,7 @@ Bundled binaries：
 
 ---
 
-## 21 個 Hunters
+## 22 個 Hunters
 
 | Hunter | 用途 | 案例 |
 |---|---|---|
@@ -266,7 +266,7 @@ bbflow/                      (這個 repo)
 ├── bin/
 │   └── bbot                 bbot wrapper（pipx/~/.local/bin 自動偵測）
 ├── hunters/
-│   ├── hunt-*.sh            21 個 hunters
+│   ├── hunt-*.sh            22 個 hunters
 │   └── README.md            每個 hunter 範例輸出 + 決策規則
 ├── nuclei-templates/
 │   ├── bb-recon/            27 個自訂 templates

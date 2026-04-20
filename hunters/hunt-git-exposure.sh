@@ -107,16 +107,23 @@ if [ "$DUMP" = "1" ]; then
       git-dumper "$HOST/.git/" "$DUMP_DIR/gitdumper" >/dev/null 2>&1 || true
   fi
 
-  # Tool 2: GitHack (fallback)
-  GITHACK="/Users/guantou/Desktop/BugBounty/tools/GitHack/GitHack.py"
-  if [ -f "$GITHACK" ]; then
+  # Tool 2: GitHack (fallback) — search in TOOLS_DIR or common install paths
+  HUNTER_BASE="$(cd "$(dirname "$0")/.." && pwd)"
+  GITHACK=""
+  for P in "$HUNTER_BASE/GitHack/GitHack.py" "$HOME/Tools/GitHack/GitHack.py" "/opt/GitHack/GitHack.py"; do
+    [ -f "$P" ] && GITHACK="$P" && break
+  done
+  if [ -n "$GITHACK" ]; then
     log "GitHack..."
     (cd "$DUMP_DIR" && python3 "$GITHACK" "$HOST/.git/" >/dev/null 2>&1) || true
   fi
 
-  # Tool 3: GitTools Dumper (extractor)
-  GITTOOLS="/Users/guantou/Desktop/BugBounty/tools/GitTools/Dumper/gitdumper.sh"
-  if [ -f "$GITTOOLS" ]; then
+  # Tool 3: GitTools Dumper (extractor) — same search strategy
+  GITTOOLS=""
+  for P in "$HUNTER_BASE/GitTools/Dumper/gitdumper.sh" "$HOME/Tools/GitTools/Dumper/gitdumper.sh" "/opt/GitTools/Dumper/gitdumper.sh"; do
+    [ -f "$P" ] && GITTOOLS="$P" && break
+  done
+  if [ -n "$GITTOOLS" ]; then
     log "GitTools Dumper..."
     bash "$GITTOOLS" "$HOST/.git/" "$DUMP_DIR/gittools" >/dev/null 2>&1 || true
   fi

@@ -21,7 +21,7 @@ command -v docker >/dev/null 2>&1 || { echo "docker not found — install Docker
 # ── Forward auth env vars from host if set ───────────────────
 ENV_ARGS=()
 for VAR in \
-    DALFOX_BLIND_URL DALFOX_COOKIE DALFOX_HEADERS \
+    DALFOX_BLIND_URL DALFOX_COOKIE DALFOX_HEADERS DALFOX_PAYLOADS \
     FFUF_COOKIE FFUF_HEADER ARJUN_HEADERS ARJUN_COOKIES \
     OSMEDEUS_VPS EXISTING_EMAIL; do
   [[ -n "${!VAR:-}" ]] && ENV_ARGS+=("-e" "${VAR}=${!VAR}")

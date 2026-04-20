@@ -2,7 +2,7 @@
 
 ## 零、一鍵自動化入口（優先嘗試）
 
-bbflow 是統一 CLI，包裝 BBOT recon + 21 個 pattern hunter，最後產出 `research/<target>/HUNTERS_REPORT_*.md`。
+bbflow 是統一 CLI，包裝 BBOT recon + 22 個 pattern hunter，最後產出 `research/<target>/HUNTERS_REPORT_*.md`。
 
 ### 安裝
 
@@ -34,7 +34,7 @@ bbflow flow target.com
 # 分階段
 bbflow init target.com                # 建 research/<target>/SCOPE.md 模板（必須先填）
 bbflow recon target.com               # BBOT passive recon
-bbflow hunt target.com                # 對 live_hosts.txt 跑全 21 hunters
+bbflow hunt target.com                # 對 live_hosts.txt 跑全 22 hunters
 
 # IP / domain / URL 清單輸入（跳過 recon）
 bbflow hunt --list hosts.txt
@@ -60,7 +60,7 @@ bbflow nuclei-update                  # 更新 PD templates + Wordfence CVE
 
 > workspace 預設為執行目錄；可 `export BBFLOW_WORKSPACE=~/work` 固定路徑。
 
-**21 個 hunters 對應的成功案例 / 已知 pattern：**
+**22 個 hunters 對應的成功案例 / 已知 pattern：**
 
 | Hunter | 驗證什麼 | 來源案例 |
 |--------|---------|---------|

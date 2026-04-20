@@ -58,13 +58,13 @@ done
 
 ### 全套 orchestration（推薦）
 
-```bash
-./tools/hunt_all.sh target.com
-# 自動：BBOT recon → 對 live hosts 跑全部 hunters → HUNTERS_REPORT.md
+使用 `bbflow` 主 CLI（詳見 [../README.md](../README.md)）：
 
-./tools/hunt_all.sh target.com --from-osmedeus   # 從 VPS 拉 Osmedeus 結果
-./tools/hunt_all.sh target.com --only cors,graphql
-./tools/hunt_all.sh target.com --mode quick      # 跳過 BBOT，用現有 recon
+```bash
+bbflow hunt target.com                     # 對 live hosts 跑全部 hunters → HUNTERS_REPORT.md
+bbflow flow target.com                     # init + recon + hunt 一條龍
+bbflow hunt target.com --only cors,graphql # 指定 hunters
+bbflow hunt --list hosts.txt --probe       # 清單模式
 ```
 
 ## 環境需求
@@ -82,7 +82,7 @@ Osmedeus VPS 模式：
 
 ```bash
 export OSMEDEUS_VPS="user@167.71.x.x"
-./tools/hunt_all.sh target.com --from-osmedeus
+bbflow recon target.com --osmedeus
 ```
 
 ## 輸出結構

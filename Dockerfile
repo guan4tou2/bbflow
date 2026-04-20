@@ -47,7 +47,26 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     bash grep sed gawk coreutils \
     # chromium for katana JS-crawl mode
     chromium chromium-driver \
+    # nmap for hunt-portscan.sh service detection
+    nmap \
     && rm -rf /var/lib/apt/lists/*
+
+# ── rustscan + feroxbuster (port scan + dir fuzzing fallback) ────────────────
+RUN ARCH="$(uname -m)" \
+    && case "$ARCH" in \
+         x86_64)  FB_URL="https://github.com/epi052/feroxbuster/releases/latest/download/x86_64-linux-feroxbuster.tar.gz"; \
+                  RS_URL="https://github.com/RustScan/RustScan/releases/download/2.3.0/rustscan_2.3.0_amd64.deb";; \
+         aarch64) FB_URL="https://github.com/epi052/feroxbuster/releases/latest/download/aarch64-linux-feroxbuster.tar.gz"; \
+                  RS_URL="";; \
+       esac \
+    && if [ -n "$FB_URL" ]; then \
+         curl -sL "$FB_URL" | tar -xz -C /usr/local/bin feroxbuster 2>/dev/null || true; \
+         chmod +x /usr/local/bin/feroxbuster 2>/dev/null || true; \
+       fi \
+    && if [ -n "$RS_URL" ]; then \
+         curl -sL "$RS_URL" -o /tmp/rustscan.deb && dpkg -i /tmp/rustscan.deb 2>/dev/null || true; \
+         rm -f /tmp/rustscan.deb; \
+       fi
 
 # ── Go binaries (from stage 1) ────────────────────────────────────────────────
 COPY --from=go-builder /go/bin/ /usr/local/bin/

@@ -18,6 +18,7 @@ services:
       - DALFOX_BLIND_URL
       - DALFOX_COOKIE
       - DALFOX_HEADERS
+      - DALFOX_PAYLOADS
       - FFUF_COOKIE
       - FFUF_HEADER
       - ARJUN_HEADERS
