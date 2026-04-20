@@ -6,33 +6,71 @@ BBOT / Osmedeus 負責 recon，21 個 pattern hunter 負責驗證。完全獨立
 
 ---
 
-## 快速安裝（任意機器）
+## 快速安裝
+
+### 自動安裝（推薦）
 
 ```bash
-# 1. Clone
 git clone https://github.com/guan4tou2/bbflow.git
 cd bbflow
+./install.sh          # 互動式，問每個工具
+./install.sh --all    # 全自動（VPS / CI 用）
+./install.sh --check  # 只檢查環境，不安裝
+```
 
-# 2. 安裝依賴（互動式）
-./install.sh
+支援：Ubuntu/Debian（apt）、Fedora/RHEL（dnf）、Arch（pacman）、macOS（brew）。
 
-# 或一行全裝（macOS / brew）
-brew install httpx subfinder nuclei katana gau waybackurls uro dalfox ffuf arjun trufflehog gf
-pipx install bbot
+---
+
+### 手動安裝（Linux，Debian/Ubuntu）
+
+```bash
+# 系統依賴
+sudo apt install -y golang pipx python3-pip git curl
+
+# Go 工具（全部放 ~/go/bin/）
+go install github.com/projectdiscovery/httpx/cmd/httpx@latest
+go install github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest
+go install github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest
+go install github.com/projectdiscovery/katana/cmd/katana@latest
+go install github.com/projectdiscovery/dnsx/cmd/dnsx@latest
+go install github.com/lc/gau/v2/cmd/gau@latest
+go install github.com/tomnomnom/waybackurls@latest
 go install github.com/tomnomnom/gf@latest
-pip3 install arjun uro --break-system-packages
+go install github.com/ffuf/ffuf/v2@latest
+go install github.com/hahwul/dalfox/v2@latest
+export PATH="$HOME/go/bin:$PATH"   # 加到 ~/.bashrc
 
-# 3. 更新 nuclei templates
-./bbflow.sh nuclei-update
+# Python 工具
+pip3 install arjun uro git-dumper waymore --break-system-packages
 
-# 4. 安裝 SecLists（wordlists for ffuf/arjun/dalfox）
+# bbot（passive recon）
+pipx install bbot && pipx ensurepath
+
+# trufflehog（secret scan）
+curl -sSfL https://raw.githubusercontent.com/trufflesecurity/trufflehog/main/scripts/install.sh \
+  | sudo sh -s -- -b /usr/local/bin
+
+# nuclei templates
+nuclei -update-templates
+
+# SecLists（僅拉需要的路徑，~200MB）
 git clone --depth=1 --filter=blob:none --sparse \
   https://github.com/danielmiessler/SecLists.git ~/Tools/SecLists
-cd ~/Tools/SecLists && git sparse-checkout set Discovery/Web-Content Fuzzing/XSS
+git -C ~/Tools/SecLists sparse-checkout set Discovery/Web-Content Fuzzing/XSS
 
-# 5. 驗證
+# gf patterns
+mkdir -p ~/.gf
+for p in sqli ssrf lfi ssti xss idor redirect; do
+  curl -sL "https://raw.githubusercontent.com/1ndianl33t/Gf-Patterns/master/${p}.json" \
+    -o ~/.gf/${p}.json
+done
+
+# 驗證
 ./bbflow.sh doctor
 ```
+
+> **macOS**：把 `go install ...` 換成 `brew install httpx subfinder nuclei katana gau waybackurls dalfox ffuf trufflehog`；其餘相同。
 
 ---
 

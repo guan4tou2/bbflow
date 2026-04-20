@@ -1,23 +1,16 @@
 #!/usr/bin/env bash
-# install.sh — 安裝 bbflow 需要的所有依賴（macOS / Linux）
+# install.sh — bbflow 依賴安裝器（Linux 優先，macOS 兼容）
 #
 # 用法：
-#   ./tools/install.sh             # 互動式（問每個工具）
-#   ./tools/install.sh --all       # 全部自動安裝
-#   ./tools/install.sh --check     # 只檢查，不安裝（等同 bbflow doctor）
-#
-# 涵蓋：
-#   必要：curl python3 dig bash (系統內建)
-#   推薦：bbot httpx subfinder dnsx nuclei
-#   --dump 才需要：git-dumper waymore
-#   可選：jq ripgrep fd
+#   ./install.sh             # 互動式（問每個工具）
+#   ./install.sh --all       # 全部自動安裝（CI / VPS 用）
+#   ./install.sh --check     # 只檢查，不安裝
 set -uo pipefail
 
-ALL=0
-CHECK_ONLY=0
+ALL=0; CHECK_ONLY=0
 while [ $# -gt 0 ]; do
   case "$1" in
-    --all) ALL=1; shift;;
+    --all)   ALL=1;        shift;;
     --check) CHECK_ONLY=1; shift;;
     -h|--help) echo "Usage: $0 [--all|--check]"; exit 0;;
     *) shift;;
@@ -26,117 +19,270 @@ done
 
 # ── Detect OS / package manager ───────────────────────────────
 OS="$(uname -s)"
+ARCH="$(uname -m)"
 PKG=""
-if [ "$OS" = "Darwin" ]; then
-  if command -v brew >/dev/null 2>&1; then PKG="brew"; fi
-elif [ "$OS" = "Linux" ]; then
-  if command -v apt >/dev/null 2>&1; then PKG="apt"
-  elif command -v dnf >/dev/null 2>&1; then PKG="dnf"
-  elif command -v pacman >/dev/null 2>&1; then PKG="pacman"
-  elif command -v apk >/dev/null 2>&1; then PKG="apk"
-  fi
+if [ "$OS" = "Linux" ]; then
+  command -v apt    >/dev/null 2>&1 && PKG="apt"
+  command -v dnf    >/dev/null 2>&1 && PKG="dnf"
+  command -v pacman >/dev/null 2>&1 && PKG="pacman"
+  command -v apk    >/dev/null 2>&1 && PKG="apk"
+elif [ "$OS" = "Darwin" ]; then
+  command -v brew   >/dev/null 2>&1 && PKG="brew"
 fi
+HAS_GO=$(command -v go >/dev/null 2>&1 && echo 1 || echo 0)
 
 R=$'\e[31m'; G=$'\e[32m'; Y=$'\e[33m'; C=$'\e[36m'; N=$'\e[0m'
-ok(){ echo "${G}✓${N} $*"; }
+ok()  { echo "${G}✓${N} $*"; }
 info(){ echo "${C}→${N} $*"; }
 warn(){ echo "${Y}!${N} $*"; }
-err(){ echo "${R}✗${N} $*"; }
+err() { echo "${R}✗${N} $*"; }
 
 echo "${C}== bbflow installer ==${N}"
-echo "OS: $OS"
-echo "Package manager: ${PKG:-none (manual install only)}"
+echo "OS: $OS ($ARCH)  pkg: ${PKG:-none}"
 echo ""
 
-# ── Table: tool | check cmd | install method ────────────────────
+# ── Helper ────────────────────────────────────────────────────
 check_and_install() {
-  local tool="$1" check="$2" install_cmd="$3" purpose="$4"
-  if eval "$check" >/dev/null 2>&1; then
-    ok "$tool ($purpose)"
+  local tool="$1" check_cmd="$2" install_cmd="$3" purpose="$4"
+  if eval "$check_cmd" >/dev/null 2>&1; then
+    ok "$tool  ($purpose)"
     return 0
   fi
-  warn "$tool missing ($purpose)"
+  warn "$tool  missing  ($purpose)"
   [ "$CHECK_ONLY" = "1" ] && return 1
   if [ -z "$install_cmd" ]; then
-    err "  no installer for this platform — install manually"
+    err "  no installer for this platform — see README"
     return 1
   fi
   if [ "$ALL" = "0" ]; then
-    read -p "  Install $tool? [y/N] " ans </dev/tty
-    [ "$ans" != "y" ] && [ "$ans" != "Y" ] && { info "skipped"; return 0; }
+    read -r -p "  Install $tool? [y/N] " ans </dev/tty
+    [[ "$ans" != [yY] ]] && { info "skipped"; return 0; }
   fi
-  info "  installing: $install_cmd"
+  info "  running: $install_cmd"
   eval "$install_cmd" && ok "$tool installed" || err "$tool install failed"
 }
 
-# ── System requirements (must exist, no auto-install) ──────────
+go_install() {
+  # go install ... + ensure ~/go/bin in PATH for this session
+  [ "$HAS_GO" = "0" ] && { err "go not found — install Go first: https://go.dev/dl/"; return 1; }
+  eval "$1" && export PATH="$HOME/go/bin:$PATH"
+}
+
+pip_install() {
+  # try pip3 with --break-system-packages (PEP 668); fall back to --user
+  python3 -m pip install "$@" --break-system-packages 2>/dev/null \
+    || python3 -m pip install "$@" --user
+}
+
+# ── System requirements ────────────────────────────────────────
 echo "${C}-- System requirements --${N}"
 for T in curl python3 bash dig awk sed grep sort; do
-  if command -v "$T" >/dev/null 2>&1; then ok "$T"; else err "$T MISSING (install via system package)"; fi
+  command -v "$T" >/dev/null 2>&1 && ok "$T" || err "$T MISSING (install via system package)"
 done
 
-# ── Core recon tools ───────────────────────────────────────────
-echo ""
-echo "${C}-- Core recon tools --${N}"
+# Go toolchain (most tools are go install)
+if [ "$HAS_GO" = "0" ]; then
+  warn "go not found — most tools require Go"
+  case "$PKG" in
+    apt)    info "  sudo apt install -y golang-go  OR  https://go.dev/dl/";;
+    dnf)    info "  sudo dnf install -y golang";;
+    pacman) info "  sudo pacman -S --noconfirm go";;
+    brew)   info "  brew install go";;
+    *)      info "  https://go.dev/dl/";;
+  esac
+fi
 
-# BBOT (via pipx)
+# ── BBOT ───────────────────────────────────────────────────────
+echo ""
+echo "${C}-- Recon engine --${N}"
 case "$PKG" in
-  brew) BBOT_INSTALL="brew install pipx && pipx install bbot";;
-  apt)  BBOT_INSTALL="sudo apt install -y pipx && pipx install bbot";;
-  dnf)  BBOT_INSTALL="sudo dnf install -y pipx && pipx install bbot";;
-  pacman) BBOT_INSTALL="sudo pacman -S --noconfirm python-pipx && pipx install bbot";;
-  *)    BBOT_INSTALL="python3 -m pip install --user pipx && pipx install bbot";;
+  apt)    BBOT_INSTALL="sudo apt install -y pipx && pipx install bbot && pipx ensurepath";;
+  dnf)    BBOT_INSTALL="sudo dnf install -y pipx && pipx install bbot && pipx ensurepath";;
+  pacman) BBOT_INSTALL="sudo pacman -S --noconfirm python-pipx && pipx install bbot && pipx ensurepath";;
+  brew)   BBOT_INSTALL="brew install pipx && pipx install bbot && pipx ensurepath";;
+  *)      BBOT_INSTALL="python3 -m pip install --user pipx && python3 -m pipx install bbot && pipx ensurepath";;
 esac
-check_and_install "bbot" "command -v bbot" "$BBOT_INSTALL" "passive + active recon"
+check_and_install "bbot" "command -v bbot || [ -x $HOME/.local/bin/bbot ]" "$BBOT_INSTALL" "passive+active subdomain recon"
 
-# httpx (ProjectDiscovery)
-HTTPX_INSTALL="go install github.com/projectdiscovery/httpx/cmd/httpx@latest"
-[ "$PKG" = "brew" ] && HTTPX_INSTALL="brew install httpx"
-check_and_install "httpx" "command -v httpx || [ -x $(dirname "$0")/httpx ]" "$HTTPX_INSTALL" "live host probe"
-
-# subfinder
-SUBF_INSTALL="go install github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest"
-[ "$PKG" = "brew" ] && SUBF_INSTALL="brew install subfinder"
-check_and_install "subfinder" "command -v subfinder || [ -x $(dirname "$0")/subfinder ]" "$SUBF_INSTALL" "passive subdomain"
-
-# dnsx
-DNSX_INSTALL="go install github.com/projectdiscovery/dnsx/cmd/dnsx@latest"
-[ "$PKG" = "brew" ] && DNSX_INSTALL="brew install dnsx"
-check_and_install "dnsx" "command -v dnsx" "$DNSX_INSTALL" "fast DNS probing"
-
-# nuclei
-NUCLEI_INSTALL="go install github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest"
-[ "$PKG" = "brew" ] && NUCLEI_INSTALL="brew install nuclei"
-check_and_install "nuclei" "command -v nuclei || [ -x $(dirname "$0")/nuclei ]" "$NUCLEI_INSTALL" "template vuln scan"
-
-# ── Git dump tools (--dump 才需要) ─────────────────────────────
+# ── ProjectDiscovery core tools ────────────────────────────────
 echo ""
-echo "${C}-- git-exposure --dump tools --${N}"
-GD_INSTALL="python3 -m pip install --user git-dumper"
-check_and_install "git-dumper" "python3 -m git_dumper --version 2>/dev/null || command -v git-dumper" "$GD_INSTALL" ".git dump (nested .git CMS pattern)"
+echo "${C}-- ProjectDiscovery tools (go install) --${N}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# waymore (historical URL discovery, used by nxdomain hunter)
-WM_INSTALL="python3 -m pip install --user waymore"
-check_and_install "waymore" "command -v waymore" "$WM_INSTALL" "historical URL (nxdomain hunter)"
+pd_tool() {
+  local name="$1" pkg="$2" purpose="$3"
+  local brew_name="${4:-$name}"
+  local check="command -v $name || [ -x $SCRIPT_DIR/$name ]"
+  local inst
+  if [ "$PKG" = "brew" ]; then
+    inst="brew install $brew_name"
+  else
+    inst="go_install 'go install $pkg@latest'"
+  fi
+  check_and_install "$name" "$check" "$inst" "$purpose"
+}
 
-# ── Optional niceties ──────────────────────────────────────────
+pd_tool httpx     "github.com/projectdiscovery/httpx/cmd/httpx"                   "live host probe"
+pd_tool subfinder "github.com/projectdiscovery/subfinder/v2/cmd/subfinder"        "passive subdomain enum"
+pd_tool nuclei    "github.com/projectdiscovery/nuclei/v3/cmd/nuclei"              "template vuln scan"
+pd_tool katana    "github.com/projectdiscovery/katana/cmd/katana"                 "JS-aware crawl"
+pd_tool dnsx      "github.com/projectdiscovery/dnsx/cmd/dnsx"                     "DNS probing"
+
+# ── URL / param discovery tools ────────────────────────────────
 echo ""
-echo "${C}-- Optional (quality-of-life) --${N}"
+echo "${C}-- URL & param discovery --${N}"
+
+# gau
+if [ "$PKG" = "brew" ]; then
+  GAU_INST="brew install gau"
+else
+  GAU_INST="go_install 'go install github.com/lc/gau/v2/cmd/gau@latest'"
+fi
+check_and_install "gau" "command -v gau" "$GAU_INST" "historical URL (wayback+commoncrawl+otx)"
+
+# waybackurls
+if [ "$PKG" = "brew" ]; then
+  WB_INST="brew install waybackurls"
+else
+  WB_INST="go_install 'go install github.com/tomnomnom/waybackurls@latest'"
+fi
+check_and_install "waybackurls" "command -v waybackurls" "$WB_INST" "Wayback Machine URLs"
+
+# gf + patterns
+if [ "$PKG" = "brew" ]; then
+  GF_INST="brew install gf"
+else
+  GF_INST="go_install 'go install github.com/tomnomnom/gf@latest'"
+fi
+check_and_install "gf" "command -v gf" "$GF_INST" "URL pattern filter (sqli/xss/ssrf/lfi)"
+if command -v gf >/dev/null 2>&1 && [ ! -d "$HOME/.gf" ]; then
+  info "gf: downloading patterns..."
+  mkdir -p "$HOME/.gf"
+  curl -sL "https://raw.githubusercontent.com/tomnomnom/gf/master/examples/redirect.json" -o "$HOME/.gf/redirect.json" 2>/dev/null || true
+  for pat in sqli ssrf lfi ssti xss idor; do
+    curl -sL "https://raw.githubusercontent.com/1ndianl33t/Gf-Patterns/master/${pat}.json" \
+      -o "$HOME/.gf/${pat}.json" 2>/dev/null || true
+  done
+  ok "gf: $(ls "$HOME/.gf"/*.json 2>/dev/null | wc -l | tr -d ' ') patterns installed"
+fi
+
+# uro (Python)
+check_and_install "uro" "command -v uro" \
+  "pip_install uro" "URL deduplication (same param pattern)"
+
+# ── Fuzzing & XSS ──────────────────────────────────────────────
+echo ""
+echo "${C}-- Fuzzing & XSS tools --${N}"
+
+# ffuf
+if [ "$PKG" = "brew" ]; then
+  FFUF_INST="brew install ffuf"
+else
+  FFUF_INST="go_install 'go install github.com/ffuf/ffuf/v2@latest'"
+fi
+check_and_install "ffuf" "command -v ffuf" "$FFUF_INST" "directory/file fuzzing"
+
+# dalfox
+if [ "$PKG" = "brew" ]; then
+  DFX_INST="brew install dalfox"
+else
+  DFX_INST="go_install 'go install github.com/hahwul/dalfox/v2@latest'"
+fi
+check_and_install "dalfox" "command -v dalfox" "$DFX_INST" "XSS scanner (blind + reflected)"
+
+# arjun (Python)
+check_and_install "arjun" "command -v arjun" \
+  "pip_install arjun" "hidden parameter discovery"
+
+# trufflehog
+TFH_CHECK="command -v trufflehog"
+if [ "$PKG" = "brew" ]; then
+  TFH_INST="brew install trufflehog"
+elif [ "$OS" = "Linux" ]; then
+  TFH_INST='curl -sSfL https://raw.githubusercontent.com/trufflesecurity/trufflehog/main/scripts/install.sh | sudo sh -s -- -b /usr/local/bin'
+else
+  TFH_INST="go_install 'go install github.com/trufflesecurity/trufflehog/v3@latest'"
+fi
+check_and_install "trufflehog" "$TFH_CHECK" "$TFH_INST" "git secret scan (100+ detectors)"
+
+# ── Git dump tools ─────────────────────────────────────────────
+echo ""
+echo "${C}-- Git exposure tools --${N}"
+check_and_install "git-dumper" \
+  "python3 -m git_dumper --version 2>/dev/null || command -v git-dumper" \
+  "pip_install git-dumper" ".git dump"
+check_and_install "waymore" "command -v waymore" \
+  "pip_install waymore" "historical URL (nxdomain hunter)"
+
+# ── SecLists ───────────────────────────────────────────────────
+echo ""
+echo "${C}-- SecLists (wordlists for ffuf/arjun/dalfox) --${N}"
+SECLISTS_DST="$HOME/Tools/SecLists"
+if [ -d "$SECLISTS_DST/Discovery/Web-Content" ]; then
+  WL=$(find "$SECLISTS_DST/Discovery/Web-Content" -name "*.txt" 2>/dev/null | wc -l | tr -d ' ')
+  ok "SecLists → $SECLISTS_DST ($WL wordlists)"
+else
+  warn "SecLists not found at $SECLISTS_DST"
+  [ "$CHECK_ONLY" = "1" ] && true || {
+    if [ "$ALL" = "0" ]; then
+      read -r -p "  Install SecLists (sparse clone, ~200MB)? [y/N] " ans </dev/tty
+      [[ "$ans" != [yY] ]] && { info "skipped"; true; } || {
+        mkdir -p "$HOME/Tools"
+        git clone --depth=1 --filter=blob:none --sparse \
+          https://github.com/danielmiessler/SecLists.git "$SECLISTS_DST" && \
+        git -C "$SECLISTS_DST" sparse-checkout set Discovery/Web-Content Fuzzing/XSS && \
+        ok "SecLists installed"
+      }
+    else
+      mkdir -p "$HOME/Tools"
+      git clone --depth=1 --filter=blob:none --sparse \
+        https://github.com/danielmiessler/SecLists.git "$SECLISTS_DST" && \
+      git -C "$SECLISTS_DST" sparse-checkout set Discovery/Web-Content Fuzzing/XSS && \
+      ok "SecLists installed"
+    fi
+  }
+fi
+
+# ── nuclei templates ───────────────────────────────────────────
+echo ""
+echo "${C}-- nuclei templates --${N}"
+if command -v nuclei >/dev/null 2>&1; then
+  NTMPL="$HOME/nuclei-templates"
+  if [ -d "$NTMPL" ]; then
+    ok "nuclei-templates → $NTMPL"
+  else
+    warn "nuclei-templates not found"
+    [ "$CHECK_ONLY" = "0" ] && {
+      if [ "$ALL" = "0" ]; then
+        read -r -p "  Run nuclei -update-templates? [y/N] " ans </dev/tty
+        [[ "$ans" == [yY] ]] && nuclei -update-templates 2>/dev/null && ok "templates updated"
+      else
+        nuclei -update-templates 2>/dev/null && ok "templates updated"
+      fi
+    }
+  fi
+else
+  info "nuclei not installed — skipping template check"
+fi
+
+# ── Optional ───────────────────────────────────────────────────
+echo ""
+echo "${C}-- Optional --${N}"
 case "$PKG" in
-  brew)   JQ_INST="brew install jq";;
   apt)    JQ_INST="sudo apt install -y jq";;
   dnf)    JQ_INST="sudo dnf install -y jq";;
   pacman) JQ_INST="sudo pacman -S --noconfirm jq";;
+  brew)   JQ_INST="brew install jq";;
   *)      JQ_INST="";;
 esac
-check_and_install "jq" "command -v jq" "$JQ_INST" "JSON parsing in shell"
+check_and_install "jq" "command -v jq" "$JQ_INST" "JSON parsing"
 
-# ── Summary ────────────────────────────────────────────────────
+# ── Final summary ──────────────────────────────────────────────
 echo ""
-echo "${C}== Summary ==${N}"
+echo "${C}== Done ==${N}"
 if [ "$CHECK_ONLY" = "1" ]; then
   info "check only — no changes made"
 else
-  info "run './tools/bbflow.sh doctor' to verify"
-  info "run './tools/bbflow.sh test' to smoke-test all hunters"
+  info "run: ./bbflow.sh doctor    (verify all paths)"
+  info "run: ./bbflow.sh test      (smoke test hunters against example.com)"
 fi
