@@ -1,0 +1,54 @@
+id: bb-open-redirect
+
+info:
+  name: Open Redirect (Directly Exploitable)
+  author: guan4tou2
+  severity: medium
+  description: |
+    Detects open redirect vulnerabilities. Directly exploitable for:
+    - OAuth token theft (redirect_uri manipulation)
+    - Phishing (legitimate domain redirect to attacker)
+    - SSRF pivot in some cases
+  tags: bb-recon,redirect,oauth
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/redirect?url=https://evil.com"
+      - "{{BaseURL}}/redirect?next=https://evil.com"
+      - "{{BaseURL}}/redirect?return=https://evil.com"
+      - "{{BaseURL}}/redirect?returnUrl=https://evil.com"
+      - "{{BaseURL}}/redirect?redirect_uri=https://evil.com"
+      - "{{BaseURL}}/login?next=https://evil.com"
+      - "{{BaseURL}}/login?return=https://evil.com"
+      - "{{BaseURL}}/login?redirect=https://evil.com"
+      - "{{BaseURL}}/logout?next=https://evil.com"
+      - "{{BaseURL}}/logout?redirect=https://evil.com"
+      - "{{BaseURL}}/out?url=https://evil.com"
+      - "{{BaseURL}}/link?url=https://evil.com"
+      - "{{BaseURL}}/go?url=https://evil.com"
+      - "{{BaseURL}}/oauth/authorize?redirect_uri=https://evil.com"
+      - "{{BaseURL}}/auth/callback?redirect_uri=https://evil.com"
+
+    stop-at-first-match: false
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 301
+          - 302
+          - 303
+          - 307
+          - 308
+
+      - type: word
+        words:
+          - "evil.com"
+        part: header
+
+    extractors:
+      - type: kval
+        name: location
+        kval:
+          - location
+        part: header

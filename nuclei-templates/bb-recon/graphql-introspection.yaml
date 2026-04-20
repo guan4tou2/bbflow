@@ -1,0 +1,70 @@
+id: bb-graphql-introspection
+
+info:
+  name: GraphQL Introspection Enabled (Full Schema Leak)
+  author: guan4tou2
+  severity: medium
+  description: |
+    Detects GraphQL endpoints with introspection enabled.
+    Directly exploitable: reveals complete API schema including mutations,
+    hidden endpoints, internal types, and deprecated fields.
+    Use with graphql-voyager or GraphQL Playground for full map.
+  tags: bb-recon,graphql,disclosure
+
+http:
+  - method: POST
+    path:
+      - "{{BaseURL}}/graphql"
+      - "{{BaseURL}}/api/graphql"
+      - "{{BaseURL}}/v1/graphql"
+      - "{{BaseURL}}/query"
+      - "{{BaseURL}}/gql"
+      - "{{BaseURL}}/api/gql"
+
+    headers:
+      Content-Type: "application/json"
+
+    body: '{"query":"{__schema{queryType{name}}}"}'
+
+    stop-at-first-match: false
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+
+      - type: word
+        words:
+          - '"__schema"'
+          - '"queryType"'
+        part: body
+
+    extractors:
+      - type: json
+        name: query_type
+        json:
+          - ".data.__schema.queryType.name"
+        part: body
+
+  # Full introspection query
+  - method: POST
+    path:
+      - "{{BaseURL}}/graphql"
+      - "{{BaseURL}}/api/graphql"
+
+    headers:
+      Content-Type: "application/json"
+
+    body: '{"query":"{ __schema { types { name fields { name } } } }"}'
+
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+
+      - type: word
+        words:
+          - '"__schema"'
+          - '"types"'
+        part: body

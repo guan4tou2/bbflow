@@ -1,0 +1,31 @@
+id: bb-private-ip-dns
+
+info:
+  name: Private IP Address in Public DNS (DNS Misconfiguration)
+  author: guan4tou2
+  severity: info
+  description: |
+    Detects DNS A records that resolve to RFC 1918 private IP addresses.
+    This indicates internal infrastructure accidentally exposed in public DNS,
+    leaking internal network topology.
+    RFC 1918: 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16
+  tags: bb-recon,dns,misconfiguration,disclosure
+
+dns:
+  - name: "{{FQDN}}"
+    type: A
+
+    matchers:
+      - type: regex
+        regex:
+          - "^10\\."
+          - "^172\\.(1[6-9]|2[0-9]|3[01])\\."
+          - "^192\\.168\\."
+        part: answer
+
+    extractors:
+      - type: regex
+        name: private_ip
+        regex:
+          - "\\b(10\\.\\d+\\.\\d+\\.\\d+|172\\.(1[6-9]|2[0-9]|3[01])\\.\\d+\\.\\d+|192\\.168\\.\\d+\\.\\d+)\\b"
+        part: answer

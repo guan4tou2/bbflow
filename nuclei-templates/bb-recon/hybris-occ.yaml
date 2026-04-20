@@ -1,0 +1,72 @@
+id: bb-hybris-occ
+
+info:
+  name: SAP Hybris / SAP Commerce OCC API Exposure
+  author: guan4tou2
+  severity: medium
+  description: |
+    Detects exposed SAP Hybris / SAP Commerce OCC (Omnichannel Commerce) API endpoints.
+    OCC APIs often expose customer PII, order history, and cart operations.
+    Anonymous OAuth tokens can often be obtained without credentials.
+  tags: bb-recon,hybris,sap-commerce,occ,disclosure
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/occ/v2"
+      - "{{BaseURL}}/rest/v2"
+      - "{{BaseURL}}/api/occ/v2"
+      # Common site IDs
+      - "{{BaseURL}}/occ/v2/electronics/catalogs"
+      - "{{BaseURL}}/rest/v2/electronics/catalogs"
+      - "{{BaseURL}}/occ/v2/apparel-uk/catalogs"
+      # Common retail site IDs
+      - "{{BaseURL}}/occ/v2/watsons/catalogs"
+      - "{{BaseURL}}/occ/v2/current/catalogs"
+
+    stop-at-first-match: false
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+
+      - type: word
+        condition: or
+        words:
+          - '"catalogs"'
+          - '"catalogVersions"'
+          - '"id"'
+          - "OCC"
+          - "hybris"
+          - '"errors"'
+        part: body
+
+  - method: POST
+    path:
+      - "{{BaseURL}}/authorizationserver/oauth/token"
+      - "{{BaseURL}}/occ/v2/electronics/users/anonymous/carts"
+
+    headers:
+      Content-Type: "application/x-www-form-urlencoded"
+
+    body: "grant_type=client_credentials&client_id=mobile_android&client_secret=secret"
+
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+
+      - type: word
+        words:
+          - '"access_token"'
+          - '"token_type"'
+        part: body
+
+    extractors:
+      - type: json
+        name: access_token
+        json:
+          - ".access_token"
+        part: body

@@ -1,0 +1,75 @@
+id: bb-s3-bucket-listable
+
+info:
+  name: S3 Bucket Publicly Listable
+  author: guan4tou2
+  severity: high
+  description: |
+    Detects S3 buckets that allow public listing.
+    Directly exploitable: enumerate all files, find sensitive data,
+    check for writable buckets (potential subdomain takeover or data injection).
+  tags: bb-recon,s3,aws,misconfiguration
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/"
+      - "{{BaseURL}}/?list-type=2"
+
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+
+      - type: word
+        condition: or
+        words:
+          - "<ListBucketResult"
+          - "AmazonS3"
+          - "<Contents>"
+          - "<Key>"
+          - "xmlns=\"http://s3.amazonaws.com"
+        part: body
+
+    extractors:
+      - type: regex
+        name: bucket_name
+        regex:
+          - "<Name>([^<]+)</Name>"
+        part: body
+
+      - type: regex
+        name: file_count
+        regex:
+          - "<KeyCount>([^<]+)</KeyCount>"
+        part: body
+
+---
+id: bb-s3-bucket-writable
+
+info:
+  name: S3 Bucket Publicly Writable
+  author: guan4tou2
+  severity: critical
+  description: |
+    Tests if an S3 bucket allows public write access.
+    Directly exploitable: upload malicious content, deface site,
+    or take over subdomain pointing to bucket.
+  tags: bb-recon,s3,aws,misconfiguration
+
+http:
+  - method: PUT
+    path:
+      - "{{BaseURL}}/nuclei-test-{{randstr}}.txt"
+
+    body: "nuclei-write-test"
+
+    matchers:
+      - type: status
+        status:
+          - 200
+
+  - method: DELETE
+    path:
+      - "{{BaseURL}}/nuclei-test-{{randstr}}.txt"

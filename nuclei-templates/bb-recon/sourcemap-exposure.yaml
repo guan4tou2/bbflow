@@ -1,0 +1,48 @@
+id: bb-sourcemap-probe
+
+info:
+  name: JavaScript Source Map Direct Probe
+  author: guan4tou2
+  severity: info
+  description: Probes common SPA bundle paths for exposed source maps (.js.map).
+  tags: bb-recon,sourcemap,disclosure
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/static/js/main.js.map"
+      - "{{BaseURL}}/static/js/bundle.js.map"
+      - "{{BaseURL}}/assets/index.js.map"
+      - "{{BaseURL}}/app.js.map"
+      - "{{BaseURL}}/bundle.js.map"
+      - "{{BaseURL}}/main.js.map"
+      - "{{BaseURL}}/vendor.js.map"
+      - "{{BaseURL}}/chunk-vendors.js.map"
+      - "{{BaseURL}}/js/app.js.map"
+      - "{{BaseURL}}/dist/app.js.map"
+
+    stop-at-first-match: false
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+
+      - type: word
+        condition: or
+        words:
+          - '"sources":'
+          - '"sourcesContent":'
+          - '"mappings":'
+          - '"sourceRoot":'
+        part: body
+
+      - type: dsl
+        dsl:
+          - 'len(body) > 10000'
+
+    extractors:
+      - type: dsl
+        name: size_kb
+        dsl:
+          - 'len(body)'

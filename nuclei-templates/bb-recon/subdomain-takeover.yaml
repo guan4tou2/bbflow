@@ -1,0 +1,92 @@
+id: bb-subdomain-takeover-cname
+
+info:
+  name: Subdomain Takeover via Dangling CNAME
+  author: guan4tou2
+  severity: high
+  description: |
+    Detects subdomains with CNAME pointing to unclaimed services.
+    Directly exploitable: register the service → full control of subdomain
+    → steal cookies (if same root domain), serve phishing content.
+  tags: bb-recon,takeover,cname,dns
+
+dns:
+  - name: "{{FQDN}}"
+    type: CNAME
+
+    matchers-condition: and
+    matchers:
+      # Target CNAME resolves but HTTP returns "not found" / claim page
+      - type: regex
+        regex:
+          - ".*"
+        part: answer
+
+    extractors:
+      - type: regex
+        name: cname_target
+        regex:
+          - "CNAME\\s+(.+)"
+        part: answer
+
+# Follow up HTTP check for common "available to claim" responses
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}"
+
+    matchers-condition: or
+    matchers:
+      # GitHub Pages
+      - type: word
+        words:
+          - "There isn't a GitHub Pages site here"
+          - "For root URLs (like http://example.com/) you must provide an index.html"
+        part: body
+
+      # Heroku
+      - type: word
+        words:
+          - "No such app"
+          - "herokucdn.com/error-pages/no-such-app"
+        part: body
+
+      # Fastly
+      - type: word
+        words:
+          - "Fastly error: unknown domain"
+        part: body
+
+      # Netlify
+      - type: word
+        words:
+          - "Not found - Request ID"
+          - "netlify"
+        part: body
+
+      # Azure / Microsoft
+      - type: word
+        words:
+          - "404 Web Site not found"
+          - "ErrorCode: DomainVerificationNotFound"
+        part: body
+
+      # AWS S3
+      - type: word
+        words:
+          - "NoSuchBucket"
+          - "The specified bucket does not exist"
+        part: body
+
+      # Shopify
+      - type: word
+        words:
+          - "Sorry, this shop is currently unavailable"
+        part: body
+
+      # Zendesk
+      - type: word
+        words:
+          - "Help Center Closed"
+          - "this help center no longer exists"
+        part: body

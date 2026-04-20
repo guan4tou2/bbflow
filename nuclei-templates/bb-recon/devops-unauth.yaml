@@ -1,0 +1,80 @@
+id: bb-devops-unauth
+
+info:
+  name: Unauthenticated DevOps Tool Exposure
+  author: guan4tou2
+  severity: high
+  description: |
+    Detects publicly accessible DevOps/internal tools without authentication:
+    Jenkins, ArgoCD, Grafana, Kibana, Prometheus, Jaeger, Consul, Vault, Harbor, etc.
+    These tools often expose CI/CD pipelines, secrets, and infrastructure details.
+  tags: bb-recon,devops,unauth,disclosure
+
+http:
+  - method: GET
+    path:
+      # Jenkins
+      - "{{BaseURL}}/jenkins"
+      - "{{BaseURL}}/jenkins/api/json"
+      # ArgoCD
+      - "{{BaseURL}}/api/version"
+      - "{{BaseURL}}/api/v1/settings"
+      # Grafana
+      - "{{BaseURL}}/grafana/api/health"
+      - "{{BaseURL}}/api/health"
+      # Kibana
+      - "{{BaseURL}}/app/kibana"
+      - "{{BaseURL}}/kibana/app/kibana"
+      # Prometheus
+      - "{{BaseURL}}/prometheus/-/healthy"
+      - "{{BaseURL}}/-/healthy"
+      # Jaeger
+      - "{{BaseURL}}/api/services"
+      # Harbor
+      - "{{BaseURL}}/api/v2.0/ping"
+      - "{{BaseURL}}/harbor/api/v2.0/ping"
+      # Consul
+      - "{{BaseURL}}/v1/agent/self"
+      # Vault
+      - "{{BaseURL}}/v1/sys/health"
+      # Kubernetes Dashboard
+      - "{{BaseURL}}/api/v1/namespaces"
+
+    stop-at-first-match: false
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+
+      - type: word
+        condition: or
+        words:
+          # Jenkins
+          - "Jenkins"
+          - "_class"
+          - "hudson.model"
+          # ArgoCD
+          - "Version"
+          - "argocd"
+          - "oidcConfig"
+          # Grafana
+          - '"database"'
+          - "grafana"
+          # Kibana
+          - "kibana"
+          - "kbn-"
+          # Prometheus
+          - "Prometheus"
+          - "is ready"
+          # Harbor
+          - "pong"
+          # Consul
+          - '"Config"'
+          - '"Member"'
+          # Vault
+          - '"initialized"'
+          - '"sealed"'
+          - '"standby"'
+        part: body
+        case-insensitive: true

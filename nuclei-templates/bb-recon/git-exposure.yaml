@@ -1,0 +1,42 @@
+id: bb-git-exposure
+
+info:
+  name: Git Repository Exposure (.git)
+  author: guan4tou2
+  severity: high
+  description: |
+    Detects publicly accessible .git directories that allow source code reconstruction.
+    Exposed .git can reveal credentials, API keys, internal architecture, and full commit history.
+  tags: bb-recon,git,disclosure
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/.git/config"
+      - "{{BaseURL}}/.git/HEAD"
+      - "{{BaseURL}}/.git/COMMIT_EDITMSG"
+      - "{{BaseURL}}/.git/logs/HEAD"
+
+    stop-at-first-match: false
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+
+      - type: word
+        condition: or
+        words:
+          - "[core]"
+          - "ref: refs/"
+          - "[remote"
+          - "repositoryformatversion"
+          - "filemode"
+        part: body
+
+    extractors:
+      - type: regex
+        name: remote_url
+        regex:
+          - 'url\s*=\s*(.+)'
+        part: body

