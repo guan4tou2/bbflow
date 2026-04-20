@@ -58,6 +58,14 @@ cd bbflow
 ./install.sh --check  # 只檢查環境，不安裝
 ```
 
+install.sh 會自動建立 `~/.local/bin/bbflow` symlink，安裝後直接用 `bbflow` 指令。
+
+若 `bbflow` 找不到：
+
+```bash
+export PATH="$HOME/.local/bin:$PATH"   # 加到 ~/.bashrc / ~/.zshrc
+```
+
 支援：Ubuntu/Debian（apt）、Fedora/RHEL（dnf）、Arch（pacman）、macOS（brew）。
 
 ---
@@ -106,8 +114,12 @@ for p in sqli ssrf lfi ssti xss idor redirect; do
     -o ~/.gf/${p}.json
 done
 
+# bbflow symlink（install.sh 已自動建立，手動也可）
+ln -sf "$(pwd)/bbflow.sh" ~/.local/bin/bbflow
+export PATH="$HOME/.local/bin:$PATH"
+
 # 驗證
-./bbflow.sh doctor
+bbflow doctor
 ```
 
 > **macOS**：把 `go install ...` 換成 `brew install httpx subfinder nuclei katana gau waybackurls dalfox ffuf trufflehog`；其餘相同。

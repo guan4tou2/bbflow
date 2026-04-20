@@ -277,12 +277,29 @@ case "$PKG" in
 esac
 check_and_install "jq" "command -v jq" "$JQ_INST" "JSON parsing"
 
+# ── bbflow CLI symlink ─────────────────────────────────────────
+TOOLS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ "$CHECK_ONLY" = "0" ]; then
+  # Try ~/.local/bin first (no sudo), fallback to /usr/local/bin
+  for BIN_DIR in "$HOME/.local/bin" "/usr/local/bin"; do
+    if [ -d "$BIN_DIR" ] || mkdir -p "$BIN_DIR" 2>/dev/null; then
+      if ln -sf "$TOOLS_DIR/bbflow.sh" "$BIN_DIR/bbflow" 2>/dev/null; then
+        ok "bbflow → $BIN_DIR/bbflow  (symlink created)"
+        # Ensure the bin dir is in PATH hint
+        echo "$PATH" | grep -q "$BIN_DIR" || warn "add to shell: export PATH=\"$BIN_DIR:\$PATH\""
+        break
+      fi
+    fi
+  done
+fi
+
 # ── Final summary ──────────────────────────────────────────────
 echo ""
 echo "${C}== Done ==${N}"
 if [ "$CHECK_ONLY" = "1" ]; then
   info "check only — no changes made"
 else
-  info "run: ./bbflow.sh doctor    (verify all paths)"
-  info "run: ./bbflow.sh test      (smoke test hunters against example.com)"
+  info "run: bbflow doctor         (verify all paths)"
+  info "run: bbflow test           (smoke test hunters against example.com)"
+  info "tip: export BBFLOW_WORKSPACE=~/work  (set research/ output dir)"
 fi

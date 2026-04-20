@@ -2,38 +2,63 @@
 
 ## 零、一鍵自動化入口（優先嘗試）
 
-大部分目標不需要從頭手動跑 — `tools/bbflow.sh` 是統一 CLI，包裝 BBOT/Osmedeus recon + 8 個 pattern hunter + scope-first 流程，最後產出 `research/<target>/HUNTERS_REPORT_*.md`。
+bbflow 是統一 CLI，包裝 BBOT recon + 21 個 pattern hunter，最後產出 `research/<target>/HUNTERS_REPORT_*.md`。
+
+### 安裝
+
+```bash
+git clone https://github.com/guan4tou2/bbflow.git
+cd bbflow
+./install.sh          # 互動式
+./install.sh --all    # 全自動（VPS / CI）
+# install.sh 會自動建立 bbflow → ~/.local/bin/bbflow symlink
+```
+
+或用 Docker（零本地依賴）：
+
+```bash
+curl -sO https://raw.githubusercontent.com/guan4tou2/bbflow/main/bbflow-docker.sh
+chmod +x bbflow-docker.sh
+./bbflow-docker.sh doctor
+```
+
+### 常用指令
 
 ```bash
 # 第一次使用
-./tools/bbflow.sh doctor              # 檢查依賴與 hunter 路徑
-./tools/bbflow.sh test                # regression test（對 example.com 跑 14 個 null case）
+bbflow doctor                         # 檢查依賴與 hunter 路徑
 
 # 一條龍 (init + recon + hunt)
-./tools/bbflow.sh flow target.com
+bbflow flow target.com
 
 # 分階段
-./tools/bbflow.sh init target.com     # 建 research/<target>/SCOPE.md 模板（必須先填）
-./tools/bbflow.sh recon target.com    # BBOT passive recon
-./tools/bbflow.sh hunt target.com     # 對 live_hosts.txt 跑全 hunters
+bbflow init target.com                # 建 research/<target>/SCOPE.md 模板（必須先填）
+bbflow recon target.com               # BBOT passive recon
+bbflow hunt target.com                # 對 live_hosts.txt 跑全 21 hunters
 
-# Osmedeus VPS 模式（流量從 VPS 出去）
+# IP / domain / URL 清單輸入（跳過 recon）
+bbflow hunt --list hosts.txt
+bbflow hunt --list hosts.txt --probe  # 先 httpx 探活
+bbflow hunt --list hosts.txt --only cors,graphql,envdata
+
+# Osmedeus VPS 模式
 export OSMEDEUS_VPS="user@1.2.3.4"
-./tools/bbflow.sh recon target.com --osmedeus
+bbflow recon target.com --osmedeus
 
-# 只跑指定 hunters
-./tools/bbflow.sh hunt target.com --only cors,graphql
+# 認證掃描（export 後所有 hunter 會繼承）
+export DALFOX_COOKIE="session=abc123"
+export FFUF_COOKIE="session=abc123"
+export ARJUN_HEADERS="Authorization: Bearer xxx"
+bbflow hunt target.com --only dalfox-xss,ffuf-dirs,arjun-params
 
 # 查狀態
-./tools/bbflow.sh list                # 所有 target 的 scope/recon/hits 概覽
-./tools/bbflow.sh status target.com   # 單一 target 詳情
-./tools/bbflow.sh scope target.com    # 顯示 SCOPE.md
-
-# 送件前：比對已送報告找重複
-./tools/bbflow.sh dedupe target.com   # grep 🔴 hits vs HITCON_ZeroDay_Reports/submited + research/*/submited
+bbflow list                           # 所有 target 概覽
+bbflow status target.com              # 單一 target 詳情
+bbflow dedupe target.com              # 比對已送報告找重複
+bbflow nuclei-update                  # 更新 PD templates + Wordfence CVE
 ```
 
-> `tools/hunt_all.sh` 已 deprecated，`bbflow` 是主入口。
+> workspace 預設為執行目錄；可 `export BBFLOW_WORKSPACE=~/work` 固定路徑。
 
 **21 個 hunters 對應的成功案例 / 已知 pattern：**
 
@@ -344,28 +369,37 @@ grep -rn "CertificatePinner\|ssl_pinning\|pinning" --include="*.java"
 ## 八、工具安裝清單
 
 ```bash
-# Git 洩漏工具
+# bbflow 一鍵安裝全部（推薦）
+git clone https://github.com/guan4tou2/bbflow.git && cd bbflow
+./install.sh --all
+
+# 手動補裝個別工具（Linux/apt）
+sudo apt install -y golang pipx python3-pip git curl
+
+# ProjectDiscovery（Go）
+go install github.com/projectdiscovery/httpx/cmd/httpx@latest
+go install github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest
+go install github.com/projectdiscovery/katana/cmd/katana@latest
+go install github.com/lc/gau/v2/cmd/gau@latest
+go install github.com/tomnomnom/waybackurls@latest
+go install github.com/tomnomnom/gf@latest
+go install github.com/ffuf/ffuf/v2@latest
+go install github.com/hahwul/dalfox/v2@latest
+export PATH="$HOME/go/bin:$PATH"
+
+# Python
+pip3 install arjun uro git-dumper waymore --break-system-packages
+pipx install bbot && pipx ensurepath
+
+# Git 洩漏工具（bbflow hunt-git-exposure 已內建 pipeline）
 pip3 install git-dumper
-git clone https://github.com/internetwache/GitTools
-git clone https://github.com/denny0223/scrabble
-git clone https://github.com/lijiejie/GitHack
 
-# 偵察工具
-# subfinder, httpx, nuclei — 從 projectdiscovery.io 下載
-brew install subfinder httpx nuclei
+# 韌體分析（非 bbflow 核心）
+brew install binwalk jadx hashcat   # macOS
+sudo apt install binwalk            # Linux
 
-# 韌體分析
-brew install binwalk
-pip3 install ubi_reader
-
-# APK 分析
-brew install jadx
-
-# 漏洞掃描
-# Claude Code 漏洞掃描器在 tools/vuln_scanner/
-
-# 密碼破解
-brew install hashcat john
+# bbflow symlink（install.sh 已處理）
+ln -sf "$(pwd)/bbflow.sh" ~/.local/bin/bbflow
 ```
 
 ## 七、SPA Source Map 獵殺（Web Bug Bounty 專用）
