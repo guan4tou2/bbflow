@@ -41,6 +41,7 @@ for GITDIR in "${DUMPED_GIT_DIRS[@]}"; do
   "$TFH" git \
     --json \
     --no-update \
+    --only-verified \
     "file://$GITDIR" 2>/dev/null >> "$TFH_OUT" || true
 done
 
@@ -52,15 +53,23 @@ if [ -n "$GIT_CONFIG_URL" ]; then
   "$TFH" git \
     --json \
     --no-update \
+    --only-verified \
     "$GIT_CONFIG_URL" 2>/dev/null >> "$TFH_OUT" || true
 fi
 
-# ── Method 3: scan target URL directly (filesystem scan) ─
-"$TFH" filesystem \
-  --json \
-  --no-update \
-  --directory "$OUT_DIR" \
-  2>/dev/null | head -20 >> "$TFH_OUT" || true
+# ── Method 3: scan GitHub org/repo if detected ────────────
+# 從 git config 提取 GitHub remote（常見於 .git 洩漏）
+GITHUB_REMOTE=$(curl -sf "$TARGET/.git/config" 2>/dev/null \
+  | grep -oE 'github\.com[:/][^[:space:]]+\.git' | head -1 \
+  | sed 's|github\.com[:/]|https://github.com/|' | sed 's|\.git$||')
+if [ -n "$GITHUB_REMOTE" ]; then
+  echo "→ scanning GitHub repo: $GITHUB_REMOTE" >&2
+  "$TFH" github \
+    --json \
+    --no-update \
+    --only-verified \
+    --repo "$GITHUB_REMOTE" 2>/dev/null >> "$TFH_OUT" || true
+fi
 
 # ── Parse and output hits ─────────────────────────────────
 if [ -s "$TFH_OUT" ]; then

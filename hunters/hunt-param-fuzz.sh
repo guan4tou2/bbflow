@@ -41,7 +41,7 @@ DOMAIN=$(echo "$TARGET" | sed -E 's|^https?://||' | cut -d/ -f1 | cut -d: -f1)
 ALL_URLS="$OUT_DIR/all_urls.txt"
 > "$ALL_URLS"
 
-# ── Step 1: katana crawl ──────────────────────────────────────
+# ── Step 1: katana crawl（JS-aware, headless mode for SPAs）─────
 if [ -n "$KATANA" ]; then
   $KATANA -u "$TARGET" \
     -d 3 \
@@ -49,6 +49,8 @@ if [ -n "$KATANA" ]; then
     -js-crawl \
     -kf all \
     -aff \
+    -ct 8m \
+    -du 10 \
     -silent \
     -o "$OUT_DIR/katana.txt" 2>/dev/null || true
   [ -s "$OUT_DIR/katana.txt" ] && cat "$OUT_DIR/katana.txt" >> "$ALL_URLS"
@@ -58,6 +60,8 @@ fi
 if [ -n "$GAU" ]; then
   echo "$DOMAIN" | "$GAU" \
     --threads 5 \
+    --subs \
+    --providers wayback,commoncrawl,otx,urlscan \
     --blacklist eot,svg,ttf,woff,png,jpg,gif,ico,css,pdf,mp4 \
     2>/dev/null >> "$ALL_URLS" || true
 
@@ -67,7 +71,7 @@ elif [ -n "$WAYBACK" ]; then
 else
   # Wayback CDX API fallback（不需外部工具）
   curl -sf \
-    "https://web.archive.org/cdx/search/cdx?url=*.${DOMAIN}&output=text&fl=original&collapse=urlkey&limit=3000" \
+    "https://web.archive.org/cdx/search/cdx?url=*.${DOMAIN}&output=text&fl=original&collapse=urlkey&limit=5000" \
     2>/dev/null >> "$ALL_URLS" || true
 fi
 
