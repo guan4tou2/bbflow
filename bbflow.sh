@@ -159,6 +159,20 @@ cmd_doctor() {
   else
     warn "nuclei DAST templates not found (run: nuclei -update-templates)"
   fi
+  local SECLISTS="$HOME/Tools/SecLists"
+  if [ -d "$SECLISTS/Discovery/Web-Content" ]; then
+    local WL_COUNT
+    WL_COUNT=$(find "$SECLISTS/Discovery/Web-Content" -name "*.txt" 2>/dev/null | wc -l | tr -d ' ')
+    ok "SecLists → $SECLISTS ($WL_COUNT wordlists)"
+  else
+    warn "SecLists not found at $SECLISTS — ffuf/arjun will use built-in lists"
+    warn "  install: git clone --depth=1 https://github.com/danielmiessler/SecLists.git $SECLISTS"
+  fi
+  if [ -f "$TOOLS_DIR/payloads/xss-custom.txt" ]; then
+    ok "xss-custom.txt → $TOOLS_DIR/payloads/xss-custom.txt"
+  else
+    warn "xss-custom.txt missing at $TOOLS_DIR/payloads/xss-custom.txt — dalfox will use SecLists fallback"
+  fi
   echo ""
   echo "${B}Hunters:${N}"
   for H in "$TOOLS_DIR/hunters"/hunt-*.sh; do
