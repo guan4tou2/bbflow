@@ -940,7 +940,7 @@ cmd_status() {
   local DIR="$BASE_DIR/research/$T"
   [ ! -d "$DIR" ] && { err "no such target"; exit 1; }
   echo "${B}$T${N}"
-  [ -f "$DIR/SCOPE.md" ] && ok "SCOPE.md ($(wc -l < $DIR/SCOPE.md | tr -d ' ') lines)" || err "SCOPE.md missing"
+  [ -f "$DIR/SCOPE.md" ] && ok "SCOPE.md ($(wc -l < $DIR/SCOPE.md | tr -d ' ') lines)" || warn "SCOPE.md not set (optional for hunt)"
   [ -s "$DIR/bbot/subdomains.txt" ] && ok "subdomains: $(wc -l < $DIR/bbot/subdomains.txt | tr -d ' ')" || warn "no subdomains"
   [ -s "$DIR/bbot/live_hosts.txt" ] && ok "live hosts: $(wc -l < $DIR/bbot/live_hosts.txt | tr -d ' ')" || warn "no live hosts"
   if [ -d "$DIR/hunters" ]; then
@@ -993,15 +993,21 @@ cmd_test() {
   test_h devops-unauth "$TOOLS_DIR/hunters/hunt-devops-unauth.sh"         "https://example.com"
   test_h actuator-deep "$TOOLS_DIR/hunters/hunt-actuator-deep.sh"         "https://example.com"
   test_h mcp-oauth     "$TOOLS_DIR/hunters/hunt-mcp-oauth-scope.sh"       "https://example.com"
+  test_h jwt           "$TOOLS_DIR/hunters/hunt-jwt.sh"                   "https://example.com"
   test_h open-redirect "$TOOLS_DIR/hunters/hunt-open-redirect.sh"         "https://example.com"
   test_h takeover      "$TOOLS_DIR/hunters/hunt-subdomain-takeover.sh"    "nonexistent-subdomain.example.com"
+  test_h nxdomain      "$TOOLS_DIR/hunters/hunt-nxdomain-corpus.sh"       "example.com"
   test_h gkey          "$TOOLS_DIR/hunters/hunt-google-api-key.sh"        "AIzaSyFAKEKEY_ForSmokeTest_AAAAAAAAAAAAA"
+  test_h arjun-params  "$TOOLS_DIR/hunters/hunt-arjun-params.sh"          "https://example.com"
+  # param-fuzz / dalfox-xss / trufflehog / portscan: require external tools or network access
+  # — skipped in null-case regression; run manually: bbflow hunt --only param-fuzz,portscan target
   rm -rf "$TMP"
+  local TOTAL=17
   echo ""
   if [ "$FAIL" = "0" ]; then
-    ok "all 14 null-case hunters passed"
+    ok "all $TOTAL null-case hunters passed (0 FP on example.com)"
   else
-    err "$FAIL hunter(s) produced unexpected hits — investigate"
+    err "$FAIL/$TOTAL hunter(s) produced unexpected hits — investigate"
     exit 1
   fi
 }
