@@ -1,0 +1,44 @@
+# ── Runtime artifacts (never in image) ───────────────────────
+*_out/
+*.log
+*.tmp
+.extract_urls.py
+.dv_*
+.gk_*
+
+# ── Local config ──────────────────────────────────────────────
+.env
+.ci-fingerprints
+
+# ── Downloaded binaries (go install / brew provides these) ───
+httpx
+httpx.zip
+subfinder
+subfinder.zip
+nuclei
+nuclei.zip
+katana
+waybackurls
+gau
+ffuf
+amass
+feroxbuster
+
+# ── Third-party cloned repos ──────────────────────────────────
+GitTools/
+GitHack/
+ci3_latest/
+ci3_latest.zip
+scrabble/
+vuln_scanner/
+nuclei-templates/nuclei-wordfence-cve/
+
+# ── Editor / OS ───────────────────────────────────────────────
+.DS_Store
+*.swp
+*~
+.idea/
+.vscode/
+
+# ── Git history (not needed in image) ────────────────────────
+.git/

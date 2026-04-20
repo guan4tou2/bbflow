@@ -8,6 +8,46 @@ BBOT / Osmedeus 負責 recon，21 個 pattern hunter 負責驗證。完全獨立
 
 ## 快速安裝
 
+### Docker（零本地依賴）
+
+```bash
+# 拉 image（~1.5 GB，含 nuclei-templates + SecLists）
+docker pull ghcr.io/guan4tou2/bbflow:latest
+
+# 用 wrapper script（最方便）
+curl -sO https://raw.githubusercontent.com/guan4tou2/bbflow/main/bbflow-docker.sh
+chmod +x bbflow-docker.sh
+
+./bbflow-docker.sh doctor
+./bbflow-docker.sh hunt target.com --only cors,graphql
+./bbflow-docker.sh hunt --list hosts.txt --probe
+./bbflow-docker.sh flow target.com
+```
+
+research/ 輸出在執行目錄（自動掛載 `$(pwd):/workspace`）。
+
+**auth env vars 直接 export 後執行即可：**
+```bash
+export DALFOX_BLIND_URL="https://xxx.oast.fun"
+export DALFOX_COOKIE="session=abc123"
+./bbflow-docker.sh hunt target.com --only dalfox-xss
+```
+
+**用 host 的 nuclei-templates + SecLists（省流量）：**
+```bash
+BBFLOW_MOUNT_TEMPLATES=1 ./bbflow-docker.sh hunt target.com
+```
+
+**docker-compose：**
+```bash
+git clone https://github.com/guan4tou2/bbflow.git && cd bbflow
+docker compose run --rm bbflow hunt target.com
+# 或自行 build：
+docker compose build && docker compose run --rm bbflow doctor
+```
+
+---
+
 ### 自動安裝（推薦）
 
 ```bash
@@ -203,7 +243,11 @@ Bundled binaries：
 ```
 bbflow/                      (這個 repo)
 ├── bbflow.sh                主 CLI
-├── install.sh               依賴安裝器
+├── bbflow-docker.sh         Docker wrapper（零本地依賴）
+├── install.sh               本機依賴安裝器
+├── Dockerfile               multi-stage build（go-builder + python:3.12-slim）
+├── docker-compose.yml       compose 版本
+├── .dockerignore
 ├── ci.sh                    本地 CI
 ├── bbot_preset_bugbounty.yml
 ├── bin/

@@ -1,0 +1,26 @@
+services:
+  bbflow:
+    build: .
+    image: ghcr.io/guan4tou2/bbflow:latest
+    stdin_open: true
+    tty: true
+    working_dir: /workspace
+    volumes:
+      # workspace: research/ + reports/ stored here (default: current dir)
+      - ${BBFLOW_WORKSPACE:-.}:/workspace
+      # optional: mount host nuclei-templates to avoid re-downloading
+      # - ${HOME}/nuclei-templates:/root/nuclei-templates
+      # optional: mount host SecLists if already installed
+      # - ${HOME}/Tools/SecLists:/root/Tools/SecLists
+    environment:
+      - BBFLOW_WORKSPACE=/workspace
+      # auth env vars — set on host and they'll be forwarded
+      - DALFOX_BLIND_URL
+      - DALFOX_COOKIE
+      - DALFOX_HEADERS
+      - FFUF_COOKIE
+      - FFUF_HEADER
+      - ARJUN_HEADERS
+      - ARJUN_COOKIES
+      - OSMEDEUS_VPS
+      - EXISTING_EMAIL
