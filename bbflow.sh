@@ -31,6 +31,10 @@ NUCLEI="$TOOLS_DIR/nuclei"; [ ! -x "$NUCLEI" ] && NUCLEI="$(command -v nuclei 2>
 NUCLEI_TEMPLATES="$TOOLS_DIR/nuclei-templates/bb-recon"
 NUCLEI_COMMUNITY="$HOME/nuclei-templates"
 NUCLEI_WORDFENCE="$TOOLS_DIR/nuclei-templates/nuclei-wordfence-cve"
+KATANA="$(command -v katana 2>/dev/null || echo '')"
+GAU="$(command -v gau 2>/dev/null || echo '')"
+WAYBACK="$(command -v waybackurls 2>/dev/null || echo '')"
+URO="$(command -v uro 2>/dev/null || echo '')"
 
 # ── Colors ─────────────────────────────────────────────────────
 R=$'\e[31m'; G=$'\e[32m'; Y=$'\e[33m'; B=$'\e[34m'; M=$'\e[35m'; C=$'\e[36m'; N=$'\e[0m'
@@ -100,6 +104,9 @@ ${B}21 Hunters (對應 confirmed bounty 案例 + 高 ROI pattern):${N}
   nuclei-wp        Wordfence WordPress CVE templates（1000+）   [需 bbflow nuclei-update]
                   → WP plugin/theme CVE 直接 PoC
   nuclei-ai        projectdiscovery/nuclei-templates-ai CVE     [需 bbflow nuclei-update]
+  param-fuzz       URL/param discovery + nuclei DAST fuzzing    [需 katana + gau/waybackurls + uro]
+                  → katana crawl + gau 歷史 URL → uro 去重 →
+                    XSS/SQLi/SSRF/LFI/SSTI/CRLF/Open-redirect
 EOF
 }
 
@@ -125,6 +132,19 @@ cmd_doctor() {
     warn "nuclei-community not found at $NUCLEI_COMMUNITY (nuclei-secrets will skip; install: nuclei -update-templates)"
   fi
   [ -f "$TOOLS_DIR/bbot_preset_bugbounty.yml" ] && ok "bbot preset" || warn "bbot preset missing"
+  echo ""
+  echo "${B}Param Fuzzing Tools:${N}"
+  [ -n "$KATANA" ] && ok "katana → $KATANA" || warn "katana not found (param-fuzz crawl degraded; brew install katana)"
+  [ -n "$GAU" ] && ok "gau → $GAU" || warn "gau not found (go install github.com/lc/gau/v2/cmd/gau@latest)"
+  [ -n "$WAYBACK" ] && ok "waybackurls → $WAYBACK" || warn "waybackurls not found (fallback: CDX API)"
+  [ -n "$URO" ] && ok "uro → $URO" || warn "uro not found (pip3 install uro --break-system-packages)"
+  if [ -d "$NUCLEI_COMMUNITY/dast/vulnerabilities" ]; then
+    local NDAST
+    NDAST=$(find "$NUCLEI_COMMUNITY/dast/vulnerabilities" -name "*.yaml" 2>/dev/null | wc -l | tr -d ' ')
+    ok "nuclei DAST templates → $NDAST templates"
+  else
+    warn "nuclei DAST templates not found (run: nuclei -update-templates)"
+  fi
   echo ""
   echo "${B}Hunters:${N}"
   for H in "$TOOLS_DIR/hunters"/hunt-*.sh; do
@@ -541,6 +561,43 @@ EOF
       else
         echo "- (no WordPress CVE findings)" >> "$REPORT"
       fi
+    fi
+  fi
+
+  # ── param-fuzz: URL/param discovery + nuclei DAST ─────────────
+  if want param-fuzz; then
+    info "hunter: param-fuzz (katana + gau + uro → nuclei DAST XSS/SQLi/SSRF/LFI/SSTI)"
+    local PF_OH="$DIR/hunters/param-fuzz"
+    mkdir -p "$PF_OH"
+    export OUT_DIR="$PF_OH"
+    echo "" >> "$REPORT"
+    echo "## param-fuzz" >> "$REPORT"
+    # run against each live host individually (katana crawl needs a base URL)
+    local PF_ALL_HITS="$PF_OH/all_hits.txt"
+    > "$PF_ALL_HITS"
+    while IFS= read -r HOST; do
+      [ -z "$HOST" ] && continue
+      local SLUG
+      SLUG=$(echo "$HOST" | sed -E 's|^https?://||' | tr '/:.' '_')
+      local PF_SUBDIR="$PF_OH/$SLUG"
+      mkdir -p "$PF_SUBDIR"
+      export OUT_DIR="$PF_SUBDIR"
+      "$TOOLS_DIR/hunters/hunt-param-fuzz.sh" "$HOST" 2>/dev/null \
+        | grep "^🔴" >> "$PF_ALL_HITS" || true
+    done < "$LIVE"
+    if [ -s "$PF_ALL_HITS" ]; then
+      local PF_COUNT
+      PF_COUNT=$(wc -l < "$PF_ALL_HITS" | tr -d ' ')
+      echo "- $PF_COUNT DAST findings → $PF_ALL_HITS" >> "$REPORT"
+      while IFS= read -r line; do
+        echo "- $line" >> "$REPORT"
+      done < "$PF_ALL_HITS"
+      ok "  param-fuzz hits: $PF_COUNT"
+    else
+      # aggregate param counts from sub-dirs
+      local TOTAL_PARAMS
+      TOTAL_PARAMS=$(cat "$PF_OH"/*/param_urls.txt 2>/dev/null | wc -l | tr -d ' ')
+      echo "- 0 DAST findings ($TOTAL_PARAMS parameterized URLs crawled)" >> "$REPORT"
     fi
   fi
 
