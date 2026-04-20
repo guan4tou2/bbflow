@@ -1,0 +1,87 @@
+id: bb-docker-registry-unauth
+
+info:
+  name: Docker Registry — Unauthenticated Access
+  author: guan4tou2
+  severity: high
+  description: |
+    Private Docker registry accessible without authentication.
+    /v2/_catalog leaks all image names. Pull images → extract embedded secrets,
+    source code, credentials in layers.
+  tags: bb-recon,docker,registry,unauth,cloud
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/v2/_catalog"
+      - "{{BaseURL}}/v2/"
+
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+
+      - type: word
+        condition: or
+        words:
+          - '"repositories"'
+          - '"Docker-Distribution-Api-Version"'
+        part: body
+
+      - type: word
+        negative: true
+        words:
+          - '"errors"'
+          - 'UNAUTHORIZED'
+          - 'authentication required'
+        part: body
+
+    extractors:
+      - type: regex
+        name: repositories
+        regex:
+          - '"repositories"\s*:\s*\[([^\]]+)\]'
+        part: body
+
+---
+id: bb-docker-registry-tags
+
+info:
+  name: Docker Registry — Image Tag Enumeration
+  author: guan4tou2
+  severity: medium
+  description: |
+    Docker registry returns image tag list without auth. Aids in identifying
+    internal image names and version history.
+  tags: bb-recon,docker,registry,unauth
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/v2/{{FUZZ}}/tags/list"
+
+    fuzzing:
+      - part: path
+        type: replace
+        mode: single
+        fuzz:
+          - "app/tags/list"
+          - "backend/tags/list"
+          - "frontend/tags/list"
+          - "api/tags/list"
+          - "web/tags/list"
+          - "service/tags/list"
+
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+
+      - type: word
+        words:
+          - '"tags"'
+          - '"name"'
+        condition: and
+        part: body

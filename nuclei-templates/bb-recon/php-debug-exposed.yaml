@@ -1,0 +1,150 @@
+id: bb-phpinfo-exposed
+
+info:
+  name: PHP Info Page — Exposed
+  author: guan4tou2
+  severity: medium
+  description: |
+    phpinfo() page publicly accessible. Leaks PHP version, server config,
+    environment variables (DB_PASSWORD, API keys), installed modules, and
+    full server path. Valuable for targeted exploitation.
+  tags: bb-recon,php,debug,exposure,info
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/phpinfo.php"
+      - "{{BaseURL}}/info.php"
+      - "{{BaseURL}}/test.php"
+      - "{{BaseURL}}/php.php"
+      - "{{BaseURL}}/php_info.php"
+      - "{{BaseURL}}/phpversion.php"
+      - "{{BaseURL}}/i.php"
+
+    stop-at-first-match: false
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+
+      - type: word
+        condition: and
+        words:
+          - 'PHP Version'
+          - 'phpinfo()'
+        part: body
+
+    extractors:
+      - type: regex
+        name: php_version
+        regex:
+          - 'PHP Version\s*</td><td[^>]*>([0-9.]+)'
+        part: body
+
+---
+id: bb-laravel-debug-exposed
+
+info:
+  name: Laravel Debug Page — Exposed
+  author: guan4tou2
+  severity: high
+  description: |
+    Laravel application running with APP_DEBUG=true. Error pages expose
+    stack traces, .env values, database credentials, and full file paths.
+  tags: bb-recon,laravel,php,debug,exposure
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/_ignition/health-check"
+      - "{{BaseURL}}/_ignition/execute-solution"
+      - "{{BaseURL}}/telescope/api/requests"
+      - "{{BaseURL}}/horizon/api/stats"
+      - "{{BaseURL}}/api/flare/reports"
+
+    matchers-condition: or
+    matchers:
+      - type: word
+        words:
+          - '"can_execute_commands"'
+          - 'Ignition'
+          - '"laravel_version"'
+        part: body
+
+      - type: word
+        words:
+          - '"payload"'
+          - '"entries"'
+          - '"horizon"'
+        condition: and
+        part: body
+
+---
+id: bb-django-debug-exposed
+
+info:
+  name: Django Debug Page — Exposed
+  author: guan4tou2
+  severity: high
+  description: |
+    Django application running with DEBUG=True. Exposed debug pages reveal
+    full settings (SECRET_KEY, DATABASE_URL, API keys) and file paths.
+  tags: bb-recon,django,python,debug,exposure
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/nonexistent-path-triggering-debug-404"
+      - "{{BaseURL}}/__debug__/"
+      - "{{BaseURL}}/django-debug-toolbar/"
+
+    matchers-condition: or
+    matchers:
+      - type: word
+        condition: and
+        words:
+          - 'Django'
+          - 'DEBUG'
+          - 'Traceback'
+        part: body
+
+      - type: word
+        condition: and
+        words:
+          - 'djdt'
+          - 'django-debug-toolbar'
+        part: body
+
+---
+id: bb-symfony-debug-exposed
+
+info:
+  name: Symfony Profiler — Exposed
+  author: guan4tou2
+  severity: high
+  description: |
+    Symfony web profiler accessible on production. Contains request/response data,
+    environment variables, service container, and application configuration.
+  tags: bb-recon,symfony,php,debug,profiler,exposure
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/_profiler/"
+      - "{{BaseURL}}/_profiler/empty/search/results"
+      - "{{BaseURL}}/_wdt/empty"
+
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+
+      - type: word
+        condition: or
+        words:
+          - 'Symfony Profiler'
+          - 'sf-toolbar'
+          - 'symfony/web-profiler-bundle'
+        part: body

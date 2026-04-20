@@ -19,7 +19,15 @@
 | `actuator-exposure.yaml` | Spring Boot /actuator/env | medium | 讀取環境變數中的 secrets |
 | `hybris-occ.yaml` | SAP Hybris OCC API + 匿名 token | medium | 取得 OAuth token，測試 IDOR |
 | `private-ip-dns.yaml` | DNS 解析到私有 IP | info | 洩漏內部網路拓撲 |
-| `sourcemap-probe.yaml` | JS source map 暴露 | info | 原始碼審計 → 找更多漏洞 |
+| `sourcemap-exposure.yaml` | JS source map 暴露 | info | 原始碼審計 → 找更多漏洞 |
+| `firebase-rtdb-exposed.yaml` | Firebase RTDB open read/write | high/critical | 直接 dump PII 或覆寫資料 |
+| `kubernetes-unauth.yaml` | K8s API server + Dashboard 未認證 | critical | 列舉 namespace/secret → 可能容器逃逸 |
+| `elasticsearch-exposed.yaml` | Elasticsearch/OpenSearch 未認證 | high | 完整資料庫 dump |
+| `terraform-state-exposed.yaml` | terraform.tfstate 暴露 | high | 取得 AWS/GCP/Azure 明文憑證 |
+| `docker-registry-exposed.yaml` | Docker registry 未認證 | high | 拉取 image → 提取內嵌 secrets |
+| `backup-files-exposed.yaml` | .sql/.zip/.tar.gz 備份檔暴露 | high | DB dump 含明文密碼 + 完整 PII |
+| `php-debug-exposed.yaml` | phpinfo / Laravel / Django / Symfony debug | medium/high | 洩漏 env var secrets + 完整 config |
+| `ssrf-url-param.yaml` | URL param SSRF（in-band + OOB + POST body） | high | 雲端 metadata 存取 → IMDS 憑證竊取 |
 
 ## 使用方式
 
@@ -40,6 +48,14 @@ $TOOLS/nuclei -l live_hosts.txt \
   -t $TEMPLATES/jwt-vulnerabilities.yaml \
   -t $TEMPLATES/s3-bucket-exposed.yaml \
   -t $TEMPLATES/git-exposure.yaml \
+  -t $TEMPLATES/terraform-state-exposed.yaml \
+  -t $TEMPLATES/firebase-rtdb-exposed.yaml \
+  -rate-limit 3 -silent
+
+# SSRF（需要 interactsh server）
+$TOOLS/nuclei -l live_hosts.txt \
+  -t $TEMPLATES/ssrf-url-param.yaml \
+  -iserver https://interact.sh \
   -rate-limit 3 -silent
 
 # 只跑 DNS 類（subdomain takeover + private IP）
@@ -47,6 +63,11 @@ $TOOLS/nuclei -l subdomains.txt \
   -t $TEMPLATES/subdomain-takeover.yaml \
   -t $TEMPLATES/private-ip-dns.yaml \
   -silent
+
+# bbflow 整合：全跑
+bbflow hunt <target>
+# 只跑 nuclei-secrets（官方 tokens+configs）
+bbflow hunt <target> --only nuclei-secrets
 ```
 
 ## ⚠️ 注意
@@ -55,3 +76,4 @@ $TOOLS/nuclei -l subdomains.txt \
 - 這些 template 用來加速 recon，**發現後必須手動驗證再送件**
 - nuclei 結果本身不能直接作為 PoC — 需要補充截圖/curl 驗證步驟
 - rate-limit 保持低數值，避免觸發 WAF 或違反 scope
+- SSRF OOB template 需要 nuclei 配置 interactsh，或手動替換 `{{interactsh-url}}` 為自己的 callback server

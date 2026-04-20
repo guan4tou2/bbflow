@@ -1,0 +1,58 @@
+id: bb-elasticsearch-unauth
+
+info:
+  name: Elasticsearch / OpenSearch — Unauthenticated Access
+  author: guan4tou2
+  severity: high
+  description: |
+    Elasticsearch or OpenSearch cluster accessible without credentials.
+    /_cat/indices reveals all index names; GET /<index>/_search dumps records.
+    Directly exploitable: full data exfiltration.
+  tags: bb-recon,elasticsearch,opensearch,unauth,database
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/_cat/indices?v"
+      - "{{BaseURL}}/_cluster/health"
+      - "{{BaseURL}}/_nodes/_all/http"
+      - "{{BaseURL}}/"
+
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+
+      - type: word
+        condition: or
+        words:
+          - '"cluster_name"'
+          - '"number_of_nodes"'
+          - 'health  status  index'
+          - '"version"'
+          - '"lucene_version"'
+        part: body
+
+      - type: word
+        negative: true
+        words:
+          - '"status":401'
+          - '"status":403'
+          - 'security_exception'
+          - 'missing authentication'
+          - 'authentication required'
+        part: body
+
+    extractors:
+      - type: regex
+        name: cluster_name
+        regex:
+          - '"cluster_name"\s*:\s*"([^"]+)"'
+        part: body
+
+      - type: regex
+        name: indices
+        regex:
+          - '\b(green|yellow|red)\s+open\s+(\S+)'
+        part: body

@@ -1,0 +1,107 @@
+id: bb-backup-sql-exposed
+
+info:
+  name: Database Backup File — Exposed
+  author: guan4tou2
+  severity: high
+  description: |
+    SQL dump or database backup file publicly accessible.
+    Contains full table data including users, passwords (hashed or plaintext),
+    PII, and application secrets.
+  tags: bb-recon,backup,database,sql,exposure
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/backup.sql"
+      - "{{BaseURL}}/db.sql"
+      - "{{BaseURL}}/database.sql"
+      - "{{BaseURL}}/dump.sql"
+      - "{{BaseURL}}/data.sql"
+      - "{{BaseURL}}/backup/backup.sql"
+      - "{{BaseURL}}/backups/db.sql"
+      - "{{BaseURL}}/sql/backup.sql"
+      - "{{BaseURL}}/db/dump.sql"
+      - "{{BaseURL}}/export.sql"
+      - "{{BaseURL}}/mysqldump.sql"
+      - "{{BaseURL}}/site.sql"
+      - "{{BaseURL}}/wordpress.sql"
+      - "{{BaseURL}}/wp.sql"
+
+    stop-at-first-match: false
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+
+      - type: word
+        condition: or
+        words:
+          - 'CREATE TABLE'
+          - 'INSERT INTO'
+          - 'DROP TABLE'
+          - 'mysqldump'
+          - '-- MySQL dump'
+          - '-- PostgreSQL database dump'
+          - 'pg_dump'
+        part: body
+
+      - type: dsl
+        dsl:
+          - 'len(body) > 1000'
+
+    extractors:
+      - type: dsl
+        name: size_kb
+        dsl:
+          - 'len(body)'
+
+---
+id: bb-backup-archive-exposed
+
+info:
+  name: Source/Config Archive — Exposed
+  author: guan4tou2
+  severity: high
+  description: |
+    Application backup archive (.zip/.tar.gz/.bak) publicly accessible.
+    May contain source code, .env files, API keys, and credentials.
+  tags: bb-recon,backup,archive,exposure
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/backup.zip"
+      - "{{BaseURL}}/backup.tar.gz"
+      - "{{BaseURL}}/site.zip"
+      - "{{BaseURL}}/www.zip"
+      - "{{BaseURL}}/web.zip"
+      - "{{BaseURL}}/public.zip"
+      - "{{BaseURL}}/html.zip"
+      - "{{BaseURL}}/app.zip"
+      - "{{BaseURL}}/source.zip"
+      - "{{BaseURL}}/deploy.tar.gz"
+      - "{{BaseURL}}/release.tar.gz"
+      - "{{BaseURL}}/config.zip"
+      - "{{BaseURL}}/config.tar.gz"
+      - "{{BaseURL}}/backup.tar"
+      - "{{BaseURL}}/files.zip"
+
+    stop-at-first-match: false
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+
+      - type: binary
+        condition: or
+        binary:
+          - "504B0304"
+          - "1f8b08"
+        part: body
+
+      - type: dsl
+        dsl:
+          - 'len(body) > 1000'

@@ -1,0 +1,55 @@
+id: bb-terraform-state-exposed
+
+info:
+  name: Terraform State File — Exposed
+  author: guan4tou2
+  severity: high
+  description: |
+    terraform.tfstate file publicly accessible. Contains plaintext cloud credentials,
+    resource ARNs, database passwords, and full infrastructure topology.
+    Directly exploitable: extract AWS/GCP/Azure keys → cloud account takeover.
+  tags: bb-recon,terraform,iac,cloud,exposure,secrets
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/terraform.tfstate"
+      - "{{BaseURL}}/.terraform/terraform.tfstate"
+      - "{{BaseURL}}/infrastructure/terraform.tfstate"
+      - "{{BaseURL}}/infra/terraform.tfstate"
+      - "{{BaseURL}}/tf/terraform.tfstate"
+      - "{{BaseURL}}/deploy/terraform.tfstate"
+      - "{{BaseURL}}/terraform/terraform.tfstate"
+      - "{{BaseURL}}/.terraform.tfstate.backup"
+      - "{{BaseURL}}/terraform.tfstate.backup"
+
+    stop-at-first-match: false
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+
+      - type: word
+        condition: and
+        words:
+          - '"terraform_version"'
+          - '"resources"'
+        part: body
+
+      - type: dsl
+        dsl:
+          - 'len(body) > 500'
+
+    extractors:
+      - type: regex
+        name: providers
+        regex:
+          - '"provider"\s*:\s*"([^"]+)"'
+        part: body
+
+      - type: regex
+        name: potential_secrets
+        regex:
+          - '"(access_key|secret_key|password|private_key|token|credentials)"\s*:\s*"([^"]{8,})"'
+        part: body

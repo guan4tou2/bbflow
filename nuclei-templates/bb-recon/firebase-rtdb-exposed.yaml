@@ -1,0 +1,88 @@
+id: bb-firebase-rtdb-exposed
+
+info:
+  name: Firebase Realtime Database — Open Read Access
+  author: guan4tou2
+  severity: high
+  description: |
+    Firebase RTDB with public read enabled. Anyone can dump all data via /.json.
+    Directly exploitable: full PII/data dump without credentials.
+  tags: bb-recon,firebase,cloud,exposure
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/.json?shallow=true"
+      - "{{BaseURL}}/.json"
+
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+
+      - type: word
+        condition: or
+        words:
+          - '"rules"'
+          - '"users"'
+          - '"data"'
+          - '"items"'
+          - '"messages"'
+          - '"sessions"'
+          - '"accounts"'
+          - 'true'
+        part: body
+
+      - type: word
+        negative: true
+        words:
+          - '"error"'
+          - 'Permission denied'
+          - 'Unauthorized'
+        part: body
+
+      - type: word
+        words:
+          - 'application/json'
+        part: header
+
+    extractors:
+      - type: dsl
+        name: size_kb
+        dsl:
+          - 'len(body)'
+
+---
+id: bb-firebase-rtdb-write
+
+info:
+  name: Firebase Realtime Database — Open Write Access
+  author: guan4tou2
+  severity: critical
+  description: |
+    Firebase RTDB with public write enabled. Attacker can overwrite/poison data.
+  tags: bb-recon,firebase,cloud,write
+
+http:
+  - method: PUT
+    path:
+      - "{{BaseURL}}/bb-probe-test.json"
+
+    body: '{"bb_probe": "nuclei_write_test_delete_me"}'
+
+    headers:
+      Content-Type: application/json
+
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+
+      - type: word
+        words:
+          - '"bb_probe"'
+          - 'nuclei_write_test'
+        condition: or
+        part: body

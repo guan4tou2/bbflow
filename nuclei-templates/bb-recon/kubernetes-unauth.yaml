@@ -1,0 +1,87 @@
+id: bb-kubernetes-api-unauth
+
+info:
+  name: Kubernetes API Server — Unauthenticated Access
+  author: guan4tou2
+  severity: critical
+  description: |
+    K8s API server accessible without credentials. /api/v1/namespaces or /api/v1/secrets
+    readable → full cluster enumeration, credential extraction, container escape path.
+  tags: bb-recon,kubernetes,k8s,unauth,cloud
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/api/v1/namespaces"
+      - "{{BaseURL}}/api/v1/pods"
+      - "{{BaseURL}}/api/v1/secrets"
+      - "{{BaseURL}}/api"
+      - "{{BaseURL}}/version"
+
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+
+      - type: word
+        condition: or
+        words:
+          - '"apiVersion"'
+          - '"kind":"NamespaceList"'
+          - '"kind":"PodList"'
+          - '"kind":"SecretList"'
+          - '"gitVersion"'
+        part: body
+
+      - type: word
+        negative: true
+        words:
+          - '"code":401'
+          - '"code":403'
+          - 'Unauthorized'
+          - 'Forbidden'
+        part: body
+
+    extractors:
+      - type: regex
+        name: namespace_count
+        regex:
+          - '"name":"([a-z0-9-]+)"'
+        part: body
+
+---
+id: bb-kubernetes-dashboard-unauth
+
+info:
+  name: Kubernetes Dashboard — Unauthenticated
+  author: guan4tou2
+  severity: high
+  description: |
+    Kubernetes Dashboard exposed without authentication.
+    Directly exploitable: exec into pods, read secrets, deploy workloads.
+  tags: bb-recon,kubernetes,dashboard,unauth
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/api/v1/namespaces/kubernetes-dashboard/services/https:kubernetes-dashboard:/proxy/"
+      - "{{BaseURL}}/api/v1/namespaces/kube-system/services/https:kubernetes-dashboard:/proxy/"
+      - "{{BaseURL}}/"
+      - "{{BaseURL}}/#!/login"
+
+    matchers-condition: or
+    matchers:
+      - type: word
+        words:
+          - 'kubernetes-dashboard'
+          - 'kube-system'
+          - 'Kubernetes Dashboard'
+        part: body
+
+      - type: word
+        words:
+          - 'Skip'
+          - 'sign in'
+        condition: and
+        part: body

