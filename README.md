@@ -119,8 +119,8 @@ done
 ### 基本流程（單一 target）
 
 ```bash
-# 切換到你的工作目錄（research/ 會建在這裡）
-cd ~/my-bugbounty-workspace
+# research/ 預設建在當前目錄；可用環境變數固定位置（一勞永逸）：
+# export BBFLOW_WORKSPACE=~/my-bugbounty-workspace
 
 # 初始化（建 SCOPE.md — scope-first 強制）
 bbflow init target.com
