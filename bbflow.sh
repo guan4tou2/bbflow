@@ -27,6 +27,8 @@ BASE_DIR="$(cd "$TOOLS_DIR/.." && pwd)"
 BBOT="$(command -v bbot 2>/dev/null || echo $HOME/.local/bin/bbot)"
 HTTPX="$TOOLS_DIR/httpx"; [ ! -x "$HTTPX" ] && HTTPX="$(command -v httpx 2>/dev/null || echo '')"
 SUBFINDER="$TOOLS_DIR/subfinder"; [ ! -x "$SUBFINDER" ] && SUBFINDER="$(command -v subfinder 2>/dev/null || echo '')"
+NUCLEI="$TOOLS_DIR/nuclei"; [ ! -x "$NUCLEI" ] && NUCLEI="$(command -v nuclei 2>/dev/null || echo '')"
+NUCLEI_TEMPLATES="$TOOLS_DIR/nuclei-templates/bb-recon"
 
 # ── Colors ─────────────────────────────────────────────────────
 R=$'\e[31m'; G=$'\e[32m'; Y=$'\e[33m'; B=$'\e[34m'; M=$'\e[35m'; C=$'\e[36m'; N=$'\e[0m'
@@ -85,6 +87,10 @@ ${B}16 Hunters (對應 confirmed bounty 案例 + 高 ROI pattern):${N}
   open-redirect redirect param + bypass 變體 + OAuth chain    [OAuth redirect_uri chain (public pattern)]
   jwt           decode + alg:none + weak HS256 + exp 檢查    [generic]
   nxdomain      歷史 hostname 超集 → Host-header payload     [Starbucks writeup]
+  nuclei        bb-recon nuclei templates (直接可利用漏洞)   [需 nuclei binary + bb-recon templates]
+               → default-creds / jwt-none / s3-listable /
+                 git-exposure / devops-unauth / open-redirect /
+                 oauth-redirect / graphql-introspection / subdomain-takeover
 EOF
 }
 
@@ -99,6 +105,8 @@ cmd_doctor() {
   [ -n "$SUBFINDER" ] && ok "subfinder → $SUBFINDER" || warn "subfinder not found (will only use crt.sh+bbot)"
   command -v git-dumper >/dev/null 2>&1 && ok "git-dumper" || warn "git-dumper not found (--dump will skip)"
   command -v waymore >/dev/null 2>&1 && ok "waymore" || warn "waymore not found (nxdomain corpus will be smaller)"
+  [ -n "$NUCLEI" ] && ok "nuclei → $NUCLEI" || warn "nuclei not found (nuclei hunter will skip)"
+  [ -d "$NUCLEI_TEMPLATES" ] && ok "nuclei-templates → $NUCLEI_TEMPLATES ($(ls "$NUCLEI_TEMPLATES"/*.yaml 2>/dev/null | wc -l | tr -d ' ') templates)" || warn "nuclei-templates not found at $NUCLEI_TEMPLATES"
   [ -f "$TOOLS_DIR/bbot_preset_bugbounty.yml" ] && ok "bbot preset" || warn "bbot preset missing"
   echo ""
   echo "${B}Hunters:${N}"
@@ -356,6 +364,50 @@ EOF
     [ -s "$NX" ] && echo "" >> "$REPORT" && \
       echo "## nxdomain corpus" >> "$REPORT" && \
       echo "- $(wc -l < $NX | tr -d ' ') NXDOMAIN candidates → $NX" >> "$REPORT"
+  fi
+
+  # ── nuclei bb-recon templates ─────────────────────────────
+  if want nuclei; then
+    if [ -z "$NUCLEI" ]; then
+      warn "nuclei not found, skipping (install: go install github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest)"
+    elif [ ! -d "$NUCLEI_TEMPLATES" ]; then
+      warn "nuclei-templates not found at $NUCLEI_TEMPLATES, skipping"
+    else
+      info "hunter: nuclei (bb-recon templates, severity: medium,high,critical)"
+      local NUCLEI_OH="$DIR/hunters/nuclei"
+      mkdir -p "$NUCLEI_OH"
+      local NUCLEI_OUT="$NUCLEI_OH/nuclei_results.txt"
+      > "$NUCLEI_OUT"
+      $NUCLEI -l "$LIVE" \
+        -t "$NUCLEI_TEMPLATES" \
+        -severity medium,high,critical \
+        -etags "dos,fuzz" \
+        -rate-limit 5 \
+        -timeout 10 \
+        -silent \
+        -o "$NUCLEI_OUT" 2>/dev/null || true
+      echo "" >> "$REPORT"
+      echo "## nuclei" >> "$REPORT"
+      if [ -s "$NUCLEI_OUT" ]; then
+        local NUCLEI_COUNT
+        NUCLEI_COUNT=$(wc -l < "$NUCLEI_OUT" | tr -d ' ')
+        echo "- $NUCLEI_COUNT findings → $NUCLEI_OUT" >> "$REPORT"
+        # Convert nuclei output to 🔴 prefixed lines for report
+        while IFS= read -r line; do
+          # nuclei output: [template-id] [type] [severity] URL
+          local sev
+          sev=$(echo "$line" | grep -oE '\[(critical|high|medium)\]' | head -1 | tr -d '[]')
+          local tmpl
+          tmpl=$(echo "$line" | grep -oE '^\[[^]]+\]' | head -1 | tr -d '[]')
+          local url
+          url=$(echo "$line" | awk '{print $NF}')
+          echo "- 🔴 NUCLEI [$sev] $tmpl → $url" >> "$REPORT"
+        done < "$NUCLEI_OUT"
+        ok "  nuclei hits: $NUCLEI_COUNT"
+      else
+        echo "- (no nuclei findings)" >> "$REPORT"
+      fi
+    fi
   fi
 
   ok "report → $REPORT"
