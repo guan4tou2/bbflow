@@ -74,7 +74,9 @@ ${B}Usage:${N}
   bbflow init <target>             初始化 research/<target>/ + SCOPE.md
   bbflow recon <target> [--osmedeus]
   bbflow hunt <target> [--only h1,...]
+  bbflow hunt --list <file> [--name <slug>] [--probe] [--only h1,...]
   bbflow flow <target>             recon + hunt + report 一條龍
+  bbflow flow --list <file> [--name <slug>] [--probe]
   bbflow dedupe <target>           對比已送報告找重複
   bbflow status [<target>]
   bbflow list
@@ -87,6 +89,7 @@ ${B}Examples:${N}
   bbflow init target.example.com
   bbflow flow target.example.com
   bbflow hunt target.example.com --only cors,graphql
+  bbflow hunt --list hosts.txt --name my-prog --probe    # IP/domain/URL list 直打
   OSMEDEUS_VPS=user@1.2.3.4 bbflow recon target.example.com --osmedeus
 
 ${B}Directory layout:${N}
@@ -358,18 +361,82 @@ except: pass" > "$SUBS"
 
 # ── cmd: hunt ────────────────────────────────────────────────
 cmd_hunt() {
-  local T="$1"; shift
-  local ONLY=""
+  # First positional arg is target name — unless it starts with '--'
+  local T=""
+  if [ $# -gt 0 ] && [[ "$1" != --* ]]; then
+    T="$1"; shift
+  fi
+
+  local ONLY="" LIST_FILE="" PROBE=0
   while [ $# -gt 0 ]; do
     case "$1" in
-      --only) ONLY="$2"; shift 2;;
-      *) shift;;
+      --only)      ONLY="$2";      shift 2;;
+      --list|-l)   LIST_FILE="$2"; shift 2;;
+      --name|-n)   T="$2";         shift 2;;
+      --probe)     PROBE=1;        shift;;
+      *)           shift;;
     esac
   done
 
+  # ── --list mode: normalize input → live_hosts.txt ─────────────
+  if [ -n "$LIST_FILE" ]; then
+    [ ! -f "$LIST_FILE" ] && { err "--list: file not found: $LIST_FILE"; exit 1; }
+    local ABS_LIST
+    ABS_LIST="$(cd "$(dirname "$LIST_FILE")" && pwd)/$(basename "$LIST_FILE")"
+    # derive target slug from filename if --name not given
+    [ -z "$T" ] && T="list_$(basename "$ABS_LIST" .txt | tr ' /' '__')"
+
+    mkdir -p "$BASE_DIR/research/$T/bbot" "$BASE_DIR/research/$T/hunters"
+
+    # Normalise: bare domain/IP → https://; strip trailing slash; dedup
+    python3 - "$ABS_LIST" > "$BASE_DIR/research/$T/bbot/live_hosts.txt" <<'NORM'
+import re, sys
+path = sys.argv[1]
+seen = set()
+for raw in open(path):
+    h = raw.strip()
+    if not h or h.startswith('#'):
+        continue
+    if not re.match(r'^https?://', h):
+        h = 'https://' + h
+    h = h.rstrip('/')
+    if h not in seen:
+        seen.add(h)
+        print(h)
+NORM
+
+    local NORM_COUNT
+    NORM_COUNT=$(wc -l < "$BASE_DIR/research/$T/bbot/live_hosts.txt" | tr -d ' ')
+    info "list: $NORM_COUNT hosts normalised from $ABS_LIST → research/$T/bbot/live_hosts.txt"
+
+    # Optional live probe (httpx / curl fallback)
+    if [ "$PROBE" = "1" ]; then
+      info "probing $NORM_COUNT hosts for live HTTP..."
+      local PROBE_IN="$BASE_DIR/research/$T/bbot/live_hosts.txt"
+      local PROBE_OUT="$BASE_DIR/research/$T/bbot/live_hosts_probed.txt"
+      if [ -n "$HTTPX" ]; then
+        "$HTTPX" -l "$PROBE_IN" -silent -threads 50 -timeout 8 -o "$PROBE_OUT" 2>/dev/null || true
+      else
+        while read -r H; do
+          local C
+          C=$(curl -sk -o /dev/null -w "%{http_code}" --max-time 5 "$H/" 2>/dev/null)
+          [[ "$C" =~ ^[234] ]] && echo "$H" >> "$PROBE_OUT"
+        done < "$PROBE_IN"
+      fi
+      if [ -s "$PROBE_OUT" ]; then
+        mv "$PROBE_OUT" "$PROBE_IN"
+        ok "probe: $(wc -l < "$PROBE_IN" | tr -d ' ') live hosts after probing"
+      else
+        warn "probe: no live hosts found — keeping original $NORM_COUNT entries"
+      fi
+    fi
+  fi
+
+  [ -z "$T" ] && { err "usage: bbflow hunt <target> [--only h1,...]  OR  bbflow hunt --list <file> [--name <slug>] [--probe]"; exit 1; }
+
   local DIR="$BASE_DIR/research/$T"
   local LIVE="$DIR/bbot/live_hosts.txt"
-  [ ! -s "$LIVE" ] && { err "no live hosts (run: bbflow recon $T)"; exit 1; }
+  [ ! -s "$LIVE" ] && { err "no live hosts (run: bbflow recon $T  or  bbflow hunt --list <file>)"; exit 1; }
   mkdir -p "$DIR/hunters"
 
   local REPORT="$DIR/HUNTERS_REPORT_$(date +%Y%m%d_%H%M).md"
@@ -787,6 +854,11 @@ cmd_nuclei_update() {
 
 # ── cmd: flow ────────────────────────────────────────────────
 cmd_flow() {
+  # --list mode: skip recon, go straight to hunt
+  if [[ "${1:-}" == --list ]] || [[ "${2:-}" == --list ]]; then
+    cmd_hunt "$@"
+    return
+  fi
   local T="$1"
   cmd_init "$T"
   cmd_recon "$T"
