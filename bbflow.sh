@@ -50,8 +50,11 @@ URO="$(command -v uro 2>/dev/null || echo '')"
 GF="$(command -v gf 2>/dev/null || echo '')"
 DALFOX="$(command -v dalfox 2>/dev/null || echo '')"
 FFUF="$(command -v ffuf 2>/dev/null || echo '')"
+FEROX="$(command -v feroxbuster 2>/dev/null || echo '')"
 ARJUN="$(command -v arjun 2>/dev/null || echo '')"
 TRUFFLEHOG="$(command -v trufflehog 2>/dev/null || echo '')"
+NMAP="$(command -v nmap 2>/dev/null || echo '')"
+RUSTSCAN="$(command -v rustscan 2>/dev/null || echo '')"
 
 # ── SecLists: auto-detect across common install locations ──────
 # export so hunters inherit without re-detecting
@@ -190,7 +193,16 @@ cmd_doctor() {
   [ -n "$URO" ] && ok "uro → $URO" || warn "uro not found (pip3 install uro --break-system-packages)"
   [ -n "$GF" ] && ok "gf → $GF ($(ls "$HOME/.gf"/*.json 2>/dev/null | wc -l | tr -d ' ') patterns)" || warn "gf not found (go install github.com/tomnomnom/gf@latest)"
   [ -n "$DALFOX" ] && ok "dalfox → $DALFOX" || warn "dalfox not found (brew install dalfox)"
-  [ -n "$FFUF" ] && ok "ffuf → $FFUF" || warn "ffuf not found (brew install ffuf)"
+  if [ -n "$FFUF" ]; then
+    ok "ffuf → $FFUF"
+  elif [ -n "$FEROX" ]; then
+    ok "ffuf not found — feroxbuster fallback → $FEROX"
+  else
+    warn "ffuf not found (go install github.com/ffuf/ffuf/v2@latest)"
+    warn "feroxbuster not found (curl -sL .../install-nix.sh | sudo bash)"
+  fi
+  [ -n "$NMAP" ] && ok "nmap → $NMAP" || warn "nmap not found (sudo apt install nmap)"
+  [ -n "$RUSTSCAN" ] && ok "rustscan → $RUSTSCAN" || warn "rustscan not found (fast port scan; nmap-only fallback active)"
   [ -n "$ARJUN" ] && ok "arjun → $ARJUN" || warn "arjun not found (pip3 install arjun --break-system-packages)"
   [ -n "$TRUFFLEHOG" ] && ok "trufflehog → $TRUFFLEHOG" || warn "trufflehog not found (brew install trufflehog)"
   if [ -d "$NUCLEI_COMMUNITY/dast/vulnerabilities" ]; then
@@ -828,10 +840,20 @@ EOF
     info "hunter: portscan (rustscan → nmap service detection)"
     local OH="$DIR/hunters/portscan"
     mkdir -p "$OH"
-    export OUT_DIR="$OH"
-    while IFS= read -r host; do
-      "$TOOLS_DIR/hunters/hunt-portscan.sh" "$host" >> "$REPORT" 2>/dev/null || true
+    echo "" >> "$REPORT"; echo "## portscan" >> "$REPORT"
+    while IFS= read -r HOST; do
+      [ -z "$HOST" ] && continue
+      export OUT_DIR="$OH"
+      "$TOOLS_DIR/hunters/hunt-portscan.sh" "$HOST" 2>/dev/null || true
     done < "$LIVE"
+    local HITS
+    HITS=$(grep -h "^🔴\|^🟡" "$OH"/*.txt 2>/dev/null | sort -u || true)
+    if [ -n "$HITS" ]; then
+      echo "$HITS" | while read L; do echo "- $L" >> "$REPORT"; done
+      echo "${G}  hits:$(echo "$HITS" | wc -l | tr -d ' ')${N}"
+    else
+      echo "- (no open ports / nmap not installed)" >> "$REPORT"
+    fi
   fi
 
   if want ffuf-dirs; then
