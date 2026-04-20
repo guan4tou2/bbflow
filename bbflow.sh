@@ -29,6 +29,7 @@ HTTPX="$TOOLS_DIR/httpx"; [ ! -x "$HTTPX" ] && HTTPX="$(command -v httpx 2>/dev/
 SUBFINDER="$TOOLS_DIR/subfinder"; [ ! -x "$SUBFINDER" ] && SUBFINDER="$(command -v subfinder 2>/dev/null || echo '')"
 NUCLEI="$TOOLS_DIR/nuclei"; [ ! -x "$NUCLEI" ] && NUCLEI="$(command -v nuclei 2>/dev/null || echo '')"
 NUCLEI_TEMPLATES="$TOOLS_DIR/nuclei-templates/bb-recon"
+NUCLEI_COMMUNITY="$HOME/nuclei-templates"
 
 # ── Colors ─────────────────────────────────────────────────────
 R=$'\e[31m'; G=$'\e[32m'; Y=$'\e[33m'; B=$'\e[34m'; M=$'\e[35m'; C=$'\e[36m'; N=$'\e[0m'
@@ -70,27 +71,29 @@ ${B}Directory layout:${N}
     nxdomain/nxdomain_corpus.txt   ← NXDOMAIN payload 候選
     HUNTERS_REPORT_YYYYMMDD_HHMM.md ← 彙總報告
 
-${B}16 Hunters (對應 confirmed bounty 案例 + 高 ROI pattern):${N}
-  hybris-occ    SAP Hybris OCC default creds + cart IDOR    [SAP Hybris OCC pattern]
-  envdata       window.envData + AWS/Google/Sentry keys     [SPA inline window config pattern]
-  sourcemap     .js.map → sourcesContent 密鑰 grep           [SPA inline config / multi-brand]
-  js-secrets    live .js bundle grep (clientSecret/...)     [SPA hardcoded client secret pattern]
-  cors          四層反射 + credentials:true 判斷             [public GraphQL IDOR writeup]
-  graphql       無認證 + introspection + integer IDOR        [public GraphQL IDOR writeup]
-  userenum      validate_email differential + rate limit    [multi-brand SSO/differential response pattern]
-  git-exposure  .git probe + config/log credential grep     [nested .git CMS pattern]
-  devops-unauth Harbor/ArgoCD/Jenkins/Grafana/Prometheus/... [public DevOps console leak pattern]
-  actuator-deep /env /heapdump /httptrace /jolokia          [Spring Boot Actuator deep probe]
-  mcp-oauth     MCP OAuth scope consent vs token 差異        [MCP OAuth scope pattern]
-  gkey          Google API key 對多服務 validation           [multi-service Google API key pattern]
-  takeover      subdomain CNAME → vendor fingerprint         [CNAME fingerprint pattern]
-  open-redirect redirect param + bypass 變體 + OAuth chain    [OAuth redirect_uri chain (public pattern)]
-  jwt           decode + alg:none + weak HS256 + exp 檢查    [generic]
-  nxdomain      歷史 hostname 超集 → Host-header payload     [Starbucks writeup]
-  nuclei        bb-recon nuclei templates (直接可利用漏洞)   [需 nuclei binary + bb-recon templates]
-               → default-creds / jwt-none / s3-listable /
-                 git-exposure / devops-unauth / open-redirect /
-                 oauth-redirect / graphql-introspection / subdomain-takeover
+${B}18 Hunters (對應 confirmed bounty 案例 + 高 ROI pattern):${N}
+  hybris-occ       SAP Hybris OCC default creds + cart IDOR    [SAP Hybris OCC pattern]
+  envdata          window.envData + AWS/Google/Sentry keys     [SPA inline window config pattern]
+  sourcemap        .js.map → sourcesContent 密鑰 grep          [SPA inline config / multi-brand]
+  js-secrets       live .js bundle grep (clientSecret/...)    [SPA hardcoded client secret pattern]
+  cors             四層反射 + credentials:true 判斷            [public GraphQL IDOR writeup]
+  graphql          無認證 + introspection + integer IDOR       [public GraphQL IDOR writeup]
+  userenum         validate_email differential + rate limit   [multi-brand SSO/differential response pattern]
+  git-exposure     .git probe + config/log credential grep    [nested .git CMS pattern]
+  devops-unauth    Harbor/ArgoCD/Jenkins/Grafana/Prometheus/... [public DevOps console leak pattern]
+  actuator-deep    /env /heapdump /httptrace /jolokia         [Spring Boot Actuator deep probe]
+  mcp-oauth        MCP OAuth scope consent vs token 差異       [MCP OAuth scope pattern]
+  gkey             Google API key 對多服務 validation          [multi-service Google API key pattern]
+  takeover         subdomain CNAME → vendor fingerprint        [CNAME fingerprint pattern]
+  open-redirect    redirect param + bypass 變體 + OAuth chain  [OAuth redirect_uri chain (public pattern)]
+  jwt              decode + alg:none + weak HS256 + exp 檢查   [generic]
+  nxdomain         歷史 hostname 超集 → Host-header payload    [Starbucks writeup]
+  nuclei           bb-recon templates (直接可利用漏洞)          [需 nuclei binary]
+                  → default-creds / jwt-none / s3-listable /
+                    git-exposure / devops-unauth / oauth-redirect /
+                    graphql-introspection / subdomain-takeover
+  nuclei-secrets   官方 projectdiscovery 123 token + 206 config templates [需 ~/nuclei-templates/]
+                  → AWS/GCP/GitHub/Slack/Stripe keys + .env/.git/config 洩漏
 EOF
 }
 
@@ -105,8 +108,16 @@ cmd_doctor() {
   [ -n "$SUBFINDER" ] && ok "subfinder → $SUBFINDER" || warn "subfinder not found (will only use crt.sh+bbot)"
   command -v git-dumper >/dev/null 2>&1 && ok "git-dumper" || warn "git-dumper not found (--dump will skip)"
   command -v waymore >/dev/null 2>&1 && ok "waymore" || warn "waymore not found (nxdomain corpus will be smaller)"
-  [ -n "$NUCLEI" ] && ok "nuclei → $NUCLEI" || warn "nuclei not found (nuclei hunter will skip)"
-  [ -d "$NUCLEI_TEMPLATES" ] && ok "nuclei-templates → $NUCLEI_TEMPLATES ($(ls "$NUCLEI_TEMPLATES"/*.yaml 2>/dev/null | wc -l | tr -d ' ') templates)" || warn "nuclei-templates not found at $NUCLEI_TEMPLATES"
+  [ -n "$NUCLEI" ] && ok "nuclei → $NUCLEI" || warn "nuclei not found (nuclei/nuclei-secrets hunters will skip)"
+  [ -d "$NUCLEI_TEMPLATES" ] && ok "nuclei-templates (bb-recon) → $NUCLEI_TEMPLATES ($(ls "$NUCLEI_TEMPLATES"/*.yaml 2>/dev/null | wc -l | tr -d ' ') templates)" || warn "nuclei-templates not found at $NUCLEI_TEMPLATES"
+  if [ -d "$NUCLEI_COMMUNITY/http/exposures/tokens" ]; then
+    local NTOK NCFG
+    NTOK=$(ls "$NUCLEI_COMMUNITY/http/exposures/tokens"/*/*.yaml 2>/dev/null | wc -l | tr -d ' ')
+    NCFG=$(ls "$NUCLEI_COMMUNITY/http/exposures/configs"/*.yaml 2>/dev/null | wc -l | tr -d ' ')
+    ok "nuclei-community → $NUCLEI_COMMUNITY (tokens:$NTOK configs:$NCFG)"
+  else
+    warn "nuclei-community not found at $NUCLEI_COMMUNITY (nuclei-secrets will skip; install: nuclei -update-templates)"
+  fi
   [ -f "$TOOLS_DIR/bbot_preset_bugbounty.yml" ] && ok "bbot preset" || warn "bbot preset missing"
   echo ""
   echo "${B}Hunters:${N}"
@@ -406,6 +417,47 @@ EOF
         ok "  nuclei hits: $NUCLEI_COUNT"
       else
         echo "- (no nuclei findings)" >> "$REPORT"
+      fi
+    fi
+  fi
+
+  # ── nuclei-secrets: 官方 token + config exposure templates ────
+  if want nuclei-secrets; then
+    if [ -z "$NUCLEI" ]; then
+      warn "nuclei not found, skipping nuclei-secrets"
+    elif [ ! -d "$NUCLEI_COMMUNITY/http/exposures/tokens" ]; then
+      warn "nuclei-community not found at $NUCLEI_COMMUNITY (run: nuclei -update-templates)"
+    else
+      info "hunter: nuclei-secrets (projectdiscovery tokens + configs, severity: info,medium,high,critical)"
+      local NS_OH="$DIR/hunters/nuclei-secrets"
+      mkdir -p "$NS_OH"
+      local NS_OUT="$NS_OH/nuclei_secrets_results.txt"
+      > "$NS_OUT"
+      # tokens/: AWS/GCP/GitHub/Slack/Stripe/etc. API key regex in HTTP responses
+      # configs/: .env, circleci, ansible, docker config file exposure
+      $NUCLEI -l "$LIVE" \
+        -t "$NUCLEI_COMMUNITY/http/exposures/tokens" \
+        -t "$NUCLEI_COMMUNITY/http/exposures/configs" \
+        -rate-limit 5 \
+        -timeout 10 \
+        -silent \
+        -o "$NS_OUT" 2>/dev/null || true
+      echo "" >> "$REPORT"
+      echo "## nuclei-secrets" >> "$REPORT"
+      if [ -s "$NS_OUT" ]; then
+        local NS_COUNT
+        NS_COUNT=$(wc -l < "$NS_OUT" | tr -d ' ')
+        echo "- $NS_COUNT findings → $NS_OUT" >> "$REPORT"
+        while IFS= read -r line; do
+          local sev tmpl url
+          sev=$(echo "$line" | grep -oE '\[(critical|high|medium|info)\]' | head -1 | tr -d '[]')
+          tmpl=$(echo "$line" | grep -oE '^\[[^]]+\]' | head -1 | tr -d '[]')
+          url=$(echo "$line" | awk '{print $NF}')
+          echo "- 🔴 SECRET [$sev] $tmpl → $url" >> "$REPORT"
+        done < "$NS_OUT"
+        ok "  nuclei-secrets hits: $NS_COUNT"
+      else
+        echo "- (no secret findings)" >> "$REPORT"
       fi
     fi
   fi
