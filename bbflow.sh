@@ -55,6 +55,13 @@ ARJUN="$(command -v arjun 2>/dev/null || echo '')"
 TRUFFLEHOG="$(command -v trufflehog 2>/dev/null || echo '')"
 NMAP="$(command -v nmap 2>/dev/null || echo '')"
 RUSTSCAN="$(command -v rustscan 2>/dev/null || echo '')"
+PARAMSPIDER="$(command -v paramspider 2>/dev/null || echo '')"
+HAKRAWLER="$(command -v hakrawler 2>/dev/null || echo '')"
+
+# ── gau config：若 tools/configs/gau.toml 存在，export 給 hunter 用 ──
+if [ -z "${GAU_CONFIG:-}" ] && [ -f "$TOOLS_DIR/configs/gau.toml" ]; then
+  export GAU_CONFIG="$TOOLS_DIR/configs/gau.toml"
+fi
 
 # ── SecLists: auto-detect across common install locations ──────
 # export so hunters inherit without re-detecting
@@ -121,7 +128,7 @@ ${B}Directory layout:${N}
     nxdomain/nxdomain_corpus.txt   ← NXDOMAIN payload 候選
     HUNTERS_REPORT_YYYYMMDD_HHMM.md ← 彙總報告
 
-${B}21 Hunters (對應 confirmed bounty 案例 + 高 ROI pattern):${N}
+${B}28 Hunters (對應 confirmed bounty 案例 + 高 ROI pattern + WAF-friendly low-noise):${N}
   hybris-occ       SAP Hybris OCC default creds + cart IDOR    [SAP Hybris OCC pattern]
   envdata          window.envData + AWS/Google/Sentry keys     [SPA inline window config pattern]
   sourcemap        .js.map → sourcesContent 密鑰 grep          [SPA inline config / multi-brand]
@@ -155,6 +162,24 @@ ${B}21 Hunters (對應 confirmed bounty 案例 + 高 ROI pattern):${N}
   arjun-params     隱藏 parameter discovery (GET/POST/JSON)      [需 arjun]
   trufflehog       git history deep secret scan (100+ detectors)[需 trufflehog]
   ffuf-dirs        Directory/file fuzzing (bug-bounty path list) [需 ffuf]
+  config-leak      xray-inspired config 洩漏探測（.git/.env/actuator/swagger/100+ paths）
+                   → 1 GET + content-match；FAST=1 只跑 P1/P2 [low-noise，WAF 友善]
+  weak-login       常見管理介面 default creds 單次探測 [low-noise，WAF 友善]
+                   → nacos/druid/grafana/jenkins/tomcat/phpmyadmin/zabbix/...
+  backup-files     備份 / dump 檔（zip/tar.gz/sql/bak） [low-noise，WAF 友善]
+                   → 41 靜態 + hostname 衍生 + magic bytes 驗證 + Index-of fallback
+  crawl-chain      katana+gau+paramspider → uro+gf → arjun → nuclei DAST → dalfox
+                   → 10 階段全鏈 URL/param discovery + fuzzing
+                   → DEPTH=5 更深 crawl, FAST=1 略 arjun+dalfox
+  nuclei-deep      擴充 nuclei 攻擊面（18 類別：XSS/SQLi/SSRF/LFI/RCE/...）
+                   → CATEGORY=xss,sqli 單跑；FAST=1 只跑 high/critical
+                   → xss, sqli, ssrf, lfi, rce, redirect, ssti, xxe, takeover,
+                     cors, info, debug, panel, weak-login, cve, misconfig, cloud, oast
+  waf-bypass       15+ 自動化 WAF 繞過測試（header/path/method/origin）
+                   → ORIGIN_IP=1.2.3.4 直連 origin
+                   → PATHS=/admin,/api/v1 自訂測試路徑
+                   → 自動測：X-Original-URL, XFF-127, 大小寫, //, ;, %00,
+                     OPTIONS method, HTTP/2, localhost Host header
 EOF
 }
 
@@ -205,6 +230,13 @@ cmd_doctor() {
   [ -n "$RUSTSCAN" ] && ok "rustscan → $RUSTSCAN" || warn "rustscan not found (fast port scan; nmap-only fallback active)"
   [ -n "$ARJUN" ] && ok "arjun → $ARJUN" || warn "arjun not found (pip3 install arjun --break-system-packages)"
   [ -n "$TRUFFLEHOG" ] && ok "trufflehog → $TRUFFLEHOG" || warn "trufflehog not found (brew install trufflehog)"
+  [ -n "$PARAMSPIDER" ] && ok "paramspider → $PARAMSPIDER" || warn "paramspider not found (pip3 install paramspider --break-system-packages)"
+  [ -n "$HAKRAWLER" ] && ok "hakrawler → $HAKRAWLER" || warn "hakrawler not found (go install github.com/hakluke/hakrawler@latest)"
+  if [ -n "${GAU_CONFIG:-}" ] && [ -f "$GAU_CONFIG" ]; then
+    ok "GAU_CONFIG → $GAU_CONFIG"
+  else
+    warn "GAU_CONFIG not set (tools/configs/gau.toml 缺失，gau 會用內建預設)"
+  fi
   if [ -d "$NUCLEI_COMMUNITY/dast/vulnerabilities" ]; then
     local NDAST
     NDAST=$(find "$NUCLEI_COMMUNITY/dast/vulnerabilities" -name "*.yaml" 2>/dev/null | wc -l | tr -d ' ')
@@ -541,6 +573,11 @@ EOF
   run_hunter mcp-oauth     "$TOOLS_DIR/hunters/hunt-mcp-oauth-scope.sh"      host
   run_hunter jwt           "$TOOLS_DIR/hunters/hunt-jwt.sh"                  host
   run_hunter open-redirect "$TOOLS_DIR/hunters/hunt-open-redirect.sh"        host
+  run_hunter config-leak   "$TOOLS_DIR/hunters/hunt-config-leak.sh"          host
+  run_hunter weak-login    "$TOOLS_DIR/hunters/hunt-weak-login.sh"           host
+  run_hunter backup-files  "$TOOLS_DIR/hunters/hunt-backup-files.sh"         host
+  run_hunter nuclei-deep   "$TOOLS_DIR/hunters/hunt-nuclei-deep.sh"          host
+  run_hunter waf-bypass    "$TOOLS_DIR/hunters/hunt-waf-bypass.sh"           host
   # subdomain-takeover: feed individual hostnames (dig CNAME), skip live_hosts loop
   if want takeover; then
     info "hunter: takeover (per-subdomain)"
@@ -766,6 +803,38 @@ EOF
       local TOTAL_PARAMS
       TOTAL_PARAMS=$(cat "$PF_OH"/*/param_urls.txt 2>/dev/null | wc -l | tr -d ' ')
       echo "- 0 DAST findings ($TOTAL_PARAMS parameterized URLs crawled)" >> "$REPORT"
+    fi
+  fi
+
+  # ── crawl-chain: 完整 URL/param discovery + fuzzing (10 stages) ──
+  if want crawl-chain; then
+    info "hunter: crawl-chain (katana+gau+paramspider → uro+gf → arjun → nuclei DAST → dalfox)"
+    local CC_OH="$DIR/hunters/crawl-chain"
+    mkdir -p "$CC_OH"
+    echo "" >> "$REPORT"
+    echo "## crawl-chain" >> "$REPORT"
+    local CC_ALL_HITS="$CC_OH/all_hits.txt"
+    > "$CC_ALL_HITS"
+    while IFS= read -r HOST; do
+      [ -z "$HOST" ] && continue
+      local SLUG
+      SLUG=$(echo "$HOST" | sed -E 's|^https?://||' | tr '/:.' '_')
+      local CC_SUBDIR="$CC_OH/$SLUG"
+      mkdir -p "$CC_SUBDIR"
+      export OUT_DIR="$CC_SUBDIR"
+      "$TOOLS_DIR/hunters/hunt-crawl-chain.sh" "$HOST" 2>/dev/null \
+        | grep "^🔴" >> "$CC_ALL_HITS" || true
+    done < "$LIVE"
+    if [ -s "$CC_ALL_HITS" ]; then
+      local CC_COUNT
+      CC_COUNT=$(wc -l < "$CC_ALL_HITS" | tr -d ' ')
+      echo "- $CC_COUNT hits → $CC_ALL_HITS" >> "$REPORT"
+      while IFS= read -r L; do echo "- $L" >> "$REPORT"; done < "$CC_ALL_HITS"
+      ok "  crawl-chain hits: $CC_COUNT"
+    else
+      local TOTAL_PU
+      TOTAL_PU=$(cat "$CC_OH"/*/param_urls.txt 2>/dev/null | wc -l | tr -d ' ')
+      echo "- 0 hits ($TOTAL_PU parameterized URLs collected)" >> "$REPORT"
     fi
   fi
 
@@ -999,10 +1068,13 @@ cmd_test() {
   test_h nxdomain      "$TOOLS_DIR/hunters/hunt-nxdomain-corpus.sh"       "example.com"
   test_h gkey          "$TOOLS_DIR/hunters/hunt-google-api-key.sh"        "AIzaSyFAKEKEY_ForSmokeTest_AAAAAAAAAAAAA"
   test_h arjun-params  "$TOOLS_DIR/hunters/hunt-arjun-params.sh"          "https://example.com"
+  test_h config-leak   "$TOOLS_DIR/hunters/hunt-config-leak.sh"           "https://example.com"
+  test_h weak-login    "$TOOLS_DIR/hunters/hunt-weak-login.sh"            "https://example.com"
+  test_h backup-files  "$TOOLS_DIR/hunters/hunt-backup-files.sh"          "https://example.com"
   # param-fuzz / dalfox-xss / trufflehog / portscan: require external tools or network access
   # — skipped in null-case regression; run manually: bbflow hunt --only param-fuzz,portscan target
   rm -rf "$TMP"
-  local TOTAL=17
+  local TOTAL=20
   echo ""
   if [ "$FAIL" = "0" ]; then
     ok "all $TOTAL null-case hunters passed (0 FP on example.com)"

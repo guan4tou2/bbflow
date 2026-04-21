@@ -35,6 +35,12 @@
 | `hunt-trufflehog-secrets.sh` | **Git history secret scan** | trufflehog git 模式（`--only-verified`）掃 100+ detector：AWS/GitHub/Stripe/GCP/Azure key + config |
 | `hunt-ffuf-dirs.sh` | **Directory & file fuzzing** | ffuf 三層 dir fuzzing：raft-medium + BB-ROI wordlist + 副檔名（.bak/.sql/.env/.git）（支援 cookie auth；無 ffuf 自動 fallback 到 feroxbuster）|
 | `hunt-portscan.sh` | **Port scan + service detection** | rustscan（快速 port 發現）→ nmap（service/version）；高風險服務：Docker API / Redis / Elasticsearch / MongoDB / Consul 等自動標 🔴 |
+| `hunt-config-leak.sh` | **xray rules / 100+ path config 洩漏** | `.git`/`.env`/`actuator`/`swagger`/`phpinfo` 等 100+ 靜態 path + content-match（magic bytes），WAF-friendly，單 GET；`FAST=1` 只跑 P1/P2 |
+| `hunt-weak-login.sh` | **管理面板 default creds** | nacos/druid/grafana/jenkins/tomcat/phpmyadmin/zabbix/solr/kibana/cas/harbor/argocd 等管理介面單次 default creds 探測（低噪音） |
+| `hunt-backup-files.sh` | **Backup / DB dump 檔** | 41 靜態候選（`backup.zip`/`db.sql`/`.tar.gz`/`.bak`）+ hostname 衍生（`<host>.zip`）+ magic bytes 驗證（PK/GZ/MySQL/BZ2）+ Index-of fallback |
+| `hunt-crawl-chain.sh` | **10 階段 URL/param discovery + DAST** | katana + gau + waybackurls + paramspider → uro 去重 → gf 分類（xss/sqli/ssrf/lfi/ssti/redirect）→ arjun 隱藏 param → nuclei DAST → dalfox XSS；`FAST=1` 略 arjun+dalfox |
+| `hunt-nuclei-deep.sh` | **擴充 nuclei 攻擊面（18 類別）** | XSS/SQLi/SSRF/LFI/RCE/Redirect/SSTI/XXE/Takeover/CORS/Info/Debug/Panel/WeakLogin/CVE/Misconfig/Cloud/OAST；`CATEGORY=xss,sqli` 指定類別；`FAST=1` 只跑 high/critical |
+| `hunt-waf-bypass.sh` | **WAF 繞過自動化測試** | 15+ 技巧自動測：大小寫、`//`、`;`、`%00`、`X-Original-URL`、XFF-127、X-Real-IP、Host localhost、OPTIONS method、HTTP/2、Origin IP 直連；`ORIGIN_IP=1.2.3.4` 自訂 origin，`PATHS=/admin` 自訂路徑 |
 
 ## 使用方式
 

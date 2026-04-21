@@ -1,0 +1,44 @@
+# gau configuration — https://github.com/lc/gau
+# 參考：https://medium.com/@felixmelvinchitechi/gau-for-recon-91f8b331293d
+#
+# 載入方式：
+#   export GAU_CONFIG="$(pwd)/tools/configs/gau.toml"
+#   gau example.com --config $GAU_CONFIG
+#
+# 或（bbflow 會自動透過 GAU_CONFIG 吃這個檔）
+#   cat tools/configs/gau.toml > ~/.gau.toml
+#
+# providers 可用值：wayback, otx, commoncrawl, urlscan
+# 記得把各 API key 填進環境變數而不是存明文在這裡
+
+threads = 5
+verbose = false
+retries = 3
+subdomains = true
+parameters = true
+providers = ["wayback", "otx", "commoncrawl", "urlscan"]
+blacklist = [
+  # 影像 / 字型 / 多媒體：不拿來 fuzz
+  "png", "jpg", "jpeg", "gif", "ico", "svg", "webp", "tiff", "bmp",
+  "woff", "woff2", "ttf", "otf", "eot",
+  "mp4", "mp3", "avi", "mov", "wmv", "webm", "flv", "ogg",
+  # 文件 / 封存：下載來源但通常沒 query param fuzz 價值
+  "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx",
+  "zip", "rar", "7z", "tar", "gz",
+  # CSS / 靜態資源
+  "css",
+]
+json = false
+# output 模式建議由 CLI flag 控制，不放在 config
+
+[urlscan]
+  # apikey = ""                    # 填入 https://urlscan.io/user/profile/ 拿到的 API key
+  # 無 key 也可用（rate-limited）
+
+[filters]
+  # 只留下帶 query param 的 URL（適合 DAST fuzzing）
+  # from_date = "202001"           # YYYYMM 格式
+  # to_date = "202512"
+  # match_status_codes = []         # e.g. [200, 301, 302]
+  # fc = []                         # filter codes (e.g. [404])
+  # mt = ["text/html", "application/json"]
