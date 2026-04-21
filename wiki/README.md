@@ -58,6 +58,42 @@ last-updated: 2026-04-21
 | **69** | [Mass Assignment & HPP](69-mass-assignment-hpp.md) | role/isAdmin 自提權 + HPP WAF bypass + 各框架（Rails/Django/Spring/Laravel）gotcha |
 | **70** | [Host Header + CRLF Injection](70-host-header-crlf.md) | Password reset poisoning（ATO 鏈）+ X-Forwarded-Host + CRLF response splitting |
 
+## 🧨 傳統 Top 10 深度
+
+| # | 文件 | 說明 |
+|---|------|------|
+| **71** | [XSS 深度](71-xss-deep.md) | DOM sink 清單 + postMessage XSS + CSP bypass + Mutation XSS（DOMPurify CVE）+ Trusted Types bypass + CSTI per framework + blind XSS |
+| **72** | [SQLi 深度](72-sqli-deep.md) | 2nd-order + OOB per-DB + 校準 blind timing + stacked 支援表 + NoSQLi（Mongo/ES/GraphQL）+ WAF bypass |
+| **73** | [SSTI 深度](73-ssti-deep.md) | 指紋差異化 probe 表 + 9 個引擎 RCE gadget（Jinja2/Twig/Freemarker/Velocity/Thymeleaf/ERB/EJS/Handlebars/Smarty）+ sandbox escape |
+| **74** | [Command Injection 深度](74-command-injection.md) | Sink per language + Unix/Windows 語法 + filter bypass（${IFS}/quote/encoding）+ blind OOB + argv injection |
+| **75** | [XXE 深度](75-xxe-deep.md) | Blind + external DTD + parameter entity exfil + Java jar:// + PHP 全 wrapper + XInclude + SVG/DOCX/EPUB/SOAP + 防禦 config |
+| **76** | [LFI / Path Traversal](76-lfi-path-traversal.md) | PHP wrapper（filter/input/data/zip/phar）+ log poisoning（apache/ssh/session）+ K8s pod token + prefix-check bypass |
+
+## 🎯 API / Business Logic
+
+| # | 文件 | 說明 |
+|---|------|------|
+| **77** | [IDOR / BOLA / BFLA](77-idor-bola-bfla.md) | OWASP API #1+#5+#3 + UUID v1 time attack + GraphQL alias batch + node interface + Autorize/AuthMatrix |
+| **78** | [Open Redirect 30+ Bypass + 攻擊鏈](78-open-redirect.md) | 30+ bypass 按防禦分類 + scheme bypass + URL parser 不一致（Orange Tsai）+ OAuth code theft chain |
+| **79** | [Subdomain / Cloud Takeover](79-subdomain-cloud-takeover.md) | can-i-take-over-xyz 對照 + S3/Azure/Heroku/GitHub Pages + apex session scope 高信任鏈 |
+| **80** | [MFA / 2FA Bypass 手冊](80-mfa-bypass.md) | Rate limit miss / race / response manipulation / backup code enum / push bombing / trust cookie / SSO bypass |
+
+## 🚀 2026 新熱門攻擊面
+
+| # | 文件 | 說明 |
+|---|------|------|
+| **81** | [MCP Server Security](81-mcp-server-security.md) | MCP OAuth scope mismatch + tool injection + indirect prompt injection + BOLA + transport |
+| **82** | [AI / LLM Security](82-ai-llm-security.md) | OWASP LLM Top 10 + direct/indirect injection + output handling + jailbreak + RAG poisoning |
+| **83** | [SAML / OIDC 攻擊](83-saml-oidc-attacks.md) | XSW 8 變體 + signature stripping + comment truncation + OIDC alg/kid/JWKS/state/nonce/PKCE |
+
+## 🛠️ Operational（流程與工具深用）
+
+| # | 文件 | 說明 |
+|---|------|------|
+| **84** | [Source Code Review Flow](84-source-code-review-flow.md) | 每語言 regex + sink + framework 檔案 + semgrep/ast-grep + 2h 打洞 checklist |
+| **85** | [Burp Pro 進階用法](85-burp-pro-advanced.md) | Collaborator + Turbo Intruder + Logger++ + BCheck + Bambda + DOM Invader + Match&Replace + Session |
+| **86** | [Dupe Hunting + Report Writing](86-dupe-hunting-report-writing.md) | 3 平台 dupe 搜尋 + VRT 現實對照 + 報告結構 + 誇大 N/A 避免 + follow-up 規範 |
+
 ## 🎯 Hunters（bbflow 內建 hunter 詳解）
 
 | # | Hunter | 目的 | 文件 |
@@ -136,6 +172,22 @@ last-updated: 2026-04-21
 - **Q: 看到 wss:// WebSocket endpoint？** → [68-websocket-cswsh.md](68-websocket-cswsh.md)（Origin 不擋 → hijack）
 - **Q: 註冊/profile update 有 role 欄位？** → [69-mass-assignment-hpp.md](69-mass-assignment-hpp.md)（isAdmin:true 直接提權）
 - **Q: Password reset link 有 evil.com？** → [70-host-header-crlf.md](70-host-header-crlf.md)（X-Forwarded-Host ATO）
+- **Q: XSS 進階（CSP/DOM/mXSS/Trusted Types）？** → [71-xss-deep.md](71-xss-deep.md)
+- **Q: SQLi blind / OOB / NoSQLi？** → [72-sqli-deep.md](72-sqli-deep.md)
+- **Q: 看到 ${} {{}} <%%> ${{}} 疑似 SSTI？** → [73-ssti-deep.md](73-ssti-deep.md)（9 engine RCE gadget）
+- **Q: 命令注入 blind 怎麼抓？** → [74-command-injection.md](74-command-injection.md)（interactsh OOB）
+- **Q: XML endpoint 要怎麼 XXE？** → [75-xxe-deep.md](75-xxe-deep.md)
+- **Q: `?file=` 參數看起來可 LFI？** → [76-lfi-path-traversal.md](76-lfi-path-traversal.md)
+- **Q: IDOR 怎麼系統化打？** → [77-idor-bola-bfla.md](77-idor-bola-bfla.md)
+- **Q: Open redirect 怎麼提升到 P2+？** → [78-open-redirect.md](78-open-redirect.md)（OAuth chain）
+- **Q: 看到 dangling CNAME？** → [79-subdomain-cloud-takeover.md](79-subdomain-cloud-takeover.md)
+- **Q: 想繞 2FA / 測 MFA 強度？** → [80-mfa-bypass.md](80-mfa-bypass.md)
+- **Q: 發現 MCP server endpoint？** → [81-mcp-server-security.md](81-mcp-server-security.md)
+- **Q: LLM chatbot / code assistant 想測？** → [82-ai-llm-security.md](82-ai-llm-security.md)
+- **Q: SAML / OIDC SSO 要怎麼測？** → [83-saml-oidc-attacks.md](83-saml-oidc-attacks.md)
+- **Q: 拿到 source code 怎麼 2 小時內打出洞？** → [84-source-code-review-flow.md](84-source-code-review-flow.md)
+- **Q: Burp Pro 想升級用法？** → [85-burp-pro-advanced.md](85-burp-pro-advanced.md)
+- **Q: 避免 dupe / N/A 的流程？** → [86-dupe-hunting-report-writing.md](86-dupe-hunting-report-writing.md)
 
 ## 相關資源
 
