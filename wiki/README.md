@@ -24,6 +24,9 @@ last-updated: 2026-04-21
 |---|------|------|
 | **14** | [WAF Bypass 指令集](14-waf-bypass-commands.md) | 15+ 自動化 + 手動 WAF 繞過（header/path/method/smuggling/origin）|
 | **15** | [Nuclei 攻擊 Template 全覆蓋](15-nuclei-attack-templates.md) | XSS/SQLi/SSRF/LFI/RCE/Redirect/SSTI/XXE/Takeover 每類對應指令 |
+| **16** | [OAuth 2.0 / OIDC 攻擊鏈](16-oauth-attack-chains.md) | 12 種：redirect_uri bypass / PKCE / scope escalation / MCP scope / JWT alg / jku |
+| **17** | [GraphQL 深度攻擊](17-graphql-deep-attacks.md) | 10 種：introspection / integer IDOR / alias overload / unauth mutation / DoS |
+| **18** | [Payload 速查冊](18-payload-cheatsheet.md) | XSS polyglot / SQLi / SSTI（Jinja2/Twig/Freemarker/Velocity/ERB）/ LFI / CmdInj / SSRF / XXE / NoSQLi |
 
 ## 🎯 Hunters（bbflow 內建 hunter 詳解）
 
@@ -85,6 +88,9 @@ last-updated: 2026-04-21
 - **Q: gau 怎麼設定 API key？** → 看 [21-tool-gau.md](21-tool-gau.md) §「設定檔」
 - **Q: 找到 SQLi 想 dump DB？** → 看 [29-tool-sqlmap.md](29-tool-sqlmap.md)
 - **Q: 新標的 24h 內要打哪裡？** → 看 [40-checklist-new-target.md](40-checklist-new-target.md)（10 階段）
+- **Q: OAuth/SSO 怎麼測？** → [16-oauth-attack-chains.md](16-oauth-attack-chains.md)（12 類攻擊 + PoC）
+- **Q: GraphQL endpoint 該測什麼？** → [17-graphql-deep-attacks.md](17-graphql-deep-attacks.md)（introspection → IDOR → alias overload）
+- **Q: 手動測時的 payload 口袋本？** → [18-payload-cheatsheet.md](18-payload-cheatsheet.md)（XSS/SQLi/SSTI/LFI/CmdInj/SSRF/XXE）
 
 ## 相關資源
 
