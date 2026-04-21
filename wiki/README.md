@@ -37,6 +37,16 @@ last-updated: 2026-04-21
 | **32** | [Cloud Key / Credential 濫用](32-cloud-key-abuse.md) | AWS/GCP/Azure + SaaS key 驗證守則（只 list 不 modify）|
 | **33** | [Nuclei 自寫 Template 教學](33-nuclei-custom-templates.md) | matchers/extractors/payloads/headless/DSL + 實戰範例 |
 
+## 🔥 大獎高頻攻擊
+
+| # | 文件 | 說明 |
+|---|------|------|
+| **60** | [HTTP Request Smuggling](60-request-smuggling.md) | CL.TE / TE.CL / TE.TE / H2.CL / H2.TE + smuggler.py + Burp workflow |
+| **61** | [Race Condition / Single-Packet Attack](61-race-condition.md) | TOCTOU + Turbo Intruder + 8 classic pattern（coupon/MFA/withdraw/...）|
+| **62** | [File Upload Exploitation](62-file-upload-exploitation.md) | ext/MIME/magic/SVG/ZIP slip/polyglot + 各語言 shell + ImageMagick/Ghostscript |
+| **63** | [Prototype Pollution](63-prototype-pollution.md) | Client-side gadget + Server-side via lodash/merge + DOM Invader + CVE table |
+| **64** | [Web Cache Poisoning / Deception](64-cache-poisoning.md) | Unkeyed header / Param Miner / Cache key 測試 + Omer Gil deception |
+
 ## 🎯 Hunters（bbflow 內建 hunter 詳解）
 
 | # | Hunter | 目的 | 文件 |
@@ -104,6 +114,11 @@ last-updated: 2026-04-21
 - **Q: JWT 找到了要怎麼攻？** → [31-jwt-attack-walkthrough.md](31-jwt-attack-walkthrough.md)（12 種實作缺陷 + jwt_tool 指令）
 - **Q: 找到 AWS/GCP key 怎麼驗證又不會踩線？** → [32-cloud-key-abuse.md](32-cloud-key-abuse.md)（安全原則 + SaaS key 對照表）
 - **Q: Nuclei 想自寫 template？** → [33-nuclei-custom-templates.md](33-nuclei-custom-templates.md)（matchers/extractors/DSL 全解 + 4 實戰範例）
+- **Q: 覺得有 desync / backend 解析異常？** → [60-request-smuggling.md](60-request-smuggling.md)（CL.TE/TE.CL/H2 全變體）
+- **Q: 業務邏輯像會 race？** → [61-race-condition.md](61-race-condition.md)（single-packet attack + 8 pattern）
+- **Q: 找到 upload endpoint 怎麼打？** → [62-file-upload-exploitation.md](62-file-upload-exploitation.md)（ext/MIME/SVG/ZIP slip 全繞法）
+- **Q: 看到 lodash.merge / Object.assign user input？** → [63-prototype-pollution.md](63-prototype-pollution.md)（client + server PP）
+- **Q: 有 CDN，想讓 reflected XSS 變 stored？** → [64-cache-poisoning.md](64-cache-poisoning.md)（unkeyed header + deception）
 
 ## 相關資源
 
