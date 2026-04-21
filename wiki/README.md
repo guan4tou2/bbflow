@@ -28,6 +28,15 @@ last-updated: 2026-04-21
 | **17** | [GraphQL 深度攻擊](17-graphql-deep-attacks.md) | 10 種：introspection / integer IDOR / alias overload / unauth mutation / DoS |
 | **18** | [Payload 速查冊](18-payload-cheatsheet.md) | XSS polyglot / SQLi / SSTI（Jinja2/Twig/Freemarker/Velocity/ERB）/ LFI / CmdInj / SSRF / XXE / NoSQLi |
 
+## 🧪 進階攻擊 Walkthrough
+
+| # | 文件 | 說明 |
+|---|------|------|
+| **19** | [Subdomain Recon 深度擴充](19-subdomain-recon-deep.md) | passive + active + permutation + 3rd-party + ASN 全鏈 |
+| **31** | [JWT 攻擊 Walkthrough](31-jwt-attack-walkthrough.md) | alg:none / HS256 brute / alg confusion / kid/jku injection + jwt_tool |
+| **32** | [Cloud Key / Credential 濫用](32-cloud-key-abuse.md) | AWS/GCP/Azure + SaaS key 驗證守則（只 list 不 modify）|
+| **33** | [Nuclei 自寫 Template 教學](33-nuclei-custom-templates.md) | matchers/extractors/payloads/headless/DSL + 實戰範例 |
+
 ## 🎯 Hunters（bbflow 內建 hunter 詳解）
 
 | # | Hunter | 目的 | 文件 |
@@ -91,6 +100,10 @@ last-updated: 2026-04-21
 - **Q: OAuth/SSO 怎麼測？** → [16-oauth-attack-chains.md](16-oauth-attack-chains.md)（12 類攻擊 + PoC）
 - **Q: GraphQL endpoint 該測什麼？** → [17-graphql-deep-attacks.md](17-graphql-deep-attacks.md)（introspection → IDOR → alias overload）
 - **Q: 手動測時的 payload 口袋本？** → [18-payload-cheatsheet.md](18-payload-cheatsheet.md)（XSS/SQLi/SSTI/LFI/CmdInj/SSRF/XXE）
+- **Q: subfinder 覆蓋率不夠怎麼辦？** → [19-subdomain-recon-deep.md](19-subdomain-recon-deep.md)（passive + active + permutation + ASN 5 層）
+- **Q: JWT 找到了要怎麼攻？** → [31-jwt-attack-walkthrough.md](31-jwt-attack-walkthrough.md)（12 種實作缺陷 + jwt_tool 指令）
+- **Q: 找到 AWS/GCP key 怎麼驗證又不會踩線？** → [32-cloud-key-abuse.md](32-cloud-key-abuse.md)（安全原則 + SaaS key 對照表）
+- **Q: Nuclei 想自寫 template？** → [33-nuclei-custom-templates.md](33-nuclei-custom-templates.md)（matchers/extractors/DSL 全解 + 4 實戰範例）
 
 ## 相關資源
 
