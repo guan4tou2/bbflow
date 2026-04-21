@@ -47,6 +47,17 @@ last-updated: 2026-04-21
 | **63** | [Prototype Pollution](63-prototype-pollution.md) | Client-side gadget + Server-side via lodash/merge + DOM Invader + CVE table |
 | **64** | [Web Cache Poisoning / Deception](64-cache-poisoning.md) | Unkeyed header / Param Miner / Cache key 測試 + Omer Gil deception |
 
+## 🛡️ OWASP Top 10 深度攻擊
+
+| # | 文件 | 說明 |
+|---|------|------|
+| **65** | [CSRF 完整指南](65-csrf-deep.md) | SameSite 2026 + JSON CSRF（text/plain trick） + referer bypass + 2FA/email change chain |
+| **66** | [SSRF 深度](66-ssrf-deep.md) | Cloud metadata（AWS/GCP/Azure/K8s）+ gopher→Redis RCE + DNS rebinding + SSRFmap/Gopherus |
+| **67** | [Insecure Deserialization](67-deserialization.md) | Java ysoserial + PHP phpggc(phar) + .NET ysoserial.net + Python pickle + Node.js |
+| **68** | [WebSocket / CSWSH](68-websocket-cswsh.md) | Origin check bypass + CSWSH hijack + subscription IDOR + message-layer injection |
+| **69** | [Mass Assignment & HPP](69-mass-assignment-hpp.md) | role/isAdmin 自提權 + HPP WAF bypass + 各框架（Rails/Django/Spring/Laravel）gotcha |
+| **70** | [Host Header + CRLF Injection](70-host-header-crlf.md) | Password reset poisoning（ATO 鏈）+ X-Forwarded-Host + CRLF response splitting |
+
 ## 🎯 Hunters（bbflow 內建 hunter 詳解）
 
 | # | Hunter | 目的 | 文件 |
@@ -119,6 +130,12 @@ last-updated: 2026-04-21
 - **Q: 找到 upload endpoint 怎麼打？** → [62-file-upload-exploitation.md](62-file-upload-exploitation.md)（ext/MIME/SVG/ZIP slip 全繞法）
 - **Q: 看到 lodash.merge / Object.assign user input？** → [63-prototype-pollution.md](63-prototype-pollution.md)（client + server PP）
 - **Q: 有 CDN，想讓 reflected XSS 變 stored？** → [64-cache-poisoning.md](64-cache-poisoning.md)（unkeyed header + deception）
+- **Q: SameSite=Lax 的 CSRF 還能打嗎？** → [65-csrf-deep.md](65-csrf-deep.md)（2-sec window + text/plain JSON CSRF + method override）
+- **Q: 有 webhook/url 參數想打 SSRF？** → [66-ssrf-deep.md](66-ssrf-deep.md)（IMDS + gopher Redis RCE + DNS rebinding）
+- **Q: 看到 aced0005 / unserialize / pickle？** → [67-deserialization.md](67-deserialization.md)（ysoserial/phpggc 全語言）
+- **Q: 看到 wss:// WebSocket endpoint？** → [68-websocket-cswsh.md](68-websocket-cswsh.md)（Origin 不擋 → hijack）
+- **Q: 註冊/profile update 有 role 欄位？** → [69-mass-assignment-hpp.md](69-mass-assignment-hpp.md)（isAdmin:true 直接提權）
+- **Q: Password reset link 有 evil.com？** → [70-host-header-crlf.md](70-host-header-crlf.md)（X-Forwarded-Host ATO）
 
 ## 相關資源
 
