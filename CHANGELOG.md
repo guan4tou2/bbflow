@@ -5,6 +5,93 @@ All notable changes to bbflow will be documented in this file.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/),
 versioning follows [Semantic Versioning](https://semver.org/).
 
+## [1.4.0] — 2026-04-25
+
+### Added — WAF-friendly low-noise wave (+6 hunters → 28 total)
+
+For government / firewall-protected targets where bursts trigger blocks. Each
+new hunter tuned for **single-shot validation** (1 request / path) and
+content-based confirmation (no "HTTP 200 = hit").
+
+- `hunt-config-leak.sh` — 100+ static config paths (.git/.env/Actuator/Swagger/
+  WEB-INF/SCM/IDE/debug consoles); each path single GET + content match;
+  `FAST=1` mode runs only 24 P1/P2 high-confidence paths
+- `hunt-weak-login.sh` — Default credential validation for 25+ vendor panels
+  (Nacos/Druid/Grafana/Jenkins/phpMyAdmin/Tomcat Manager/Solr Admin/RabbitMQ/
+  Kibana/Jeecg/Jeesite/SpringBoot Admin/Apollo/GitLab/Gitea/Portainer/Rancher/
+  Harbor/Nexus/SonarQube/Weblogic/Zabbix/Shiro/Airflow/Superset/Metabase/
+  Couchbase). Each vendor 1–3 login requests; HEAD/GET pre-check; differential
+  body pattern match (not just 2xx)
+- `hunt-backup-files.sh` — 40 static backup names + dynamic candidates from
+  hostname (target.com.zip / target.tar.gz / target.sql) + Index-of fallback
+  (/backup/, /backups/, /bak/, /db/, /upload/); content-type + size dual
+  verification (avoids SPA HTML 200 false positives)
+- `hunt-nuclei-deep.sh` — Per-category nuclei scans (XSS/SQLi/SSRF/LFI/RCE/
+  Path Traversal/Info Leak/Debug/Weak login/Default cred/Exposed panels/
+  Misconfig/CVE/Takeover/CORS/Open Redirect/SSTI/XXE). `CATEGORY=` env var
+  to scope to one class. Auto-integrates `bb-recon` custom templates if present
+- `hunt-waf-bypass.sh` — wafw00f fingerprint + 15+ bypass techniques (path
+  case mutation / nullbyte / unicode / chunked encoding / Origin header /
+  X-Forwarded-For); records bypass paths for downstream hunters; `ORIGIN_IP=`
+  env for direct-origin bypass
+- `hunt-crawl-chain.sh` — 10-stage URL discovery and DAST chain
+  (katana → gau → waybackurls → paramspider → hakrawler → uro dedup →
+  gf classify → arjun hidden params → nuclei DAST per gf class → dalfox
+  XSS deep). End-to-end fuzz pipeline for SPAs / API endpoints
+
+### Changed
+- bbflow.sh `hunt` loop now dispatches 19 base hunters via `run_hunter` +
+  9 special-handling hunters (subdomain-takeover with file fallback,
+  nxdomain-corpus, param-fuzz, crawl-chain, dalfox-xss, arjun-params,
+  trufflehog-secrets, portscan, ffuf-dirs)
+- README.md hunter count: 22 → 28
+- `hunters/README.md` extended with 6 new sections + decision rules
+
+### Lessons learned baked into hunters
+- WAF-protected gov sites burn doctor commands → noise budget matters
+- 200 OK ≠ vulnerable hit (every new hunter validates body content)
+- Index-of fallback catches what static-name probing misses
+
+## [1.3.0] — 2026-04-23
+
+### Added
+- `hunt-param-fuzz.sh` — Standalone parameter-fuzzing pipeline (katana JS-aware
+  crawl depth 3 → gau / waybackurls / Wayback CDX → uro dedup → nuclei --dast
+  XSS/SQLi/SSRF/LFI/SSTI/Open-redirect)
+- bbflow.sh hunt loop now special-cases param-fuzz (per-host iteration)
+
+## [1.2.0] — 2026-04-21
+
+### Added
+- `hunt-portscan.sh` — rustscan (fast SYN) → nmap (service/version on open
+  ports). Falls back to nmap-only if rustscan not installed
+- bbflow.sh hunt loop now invokes portscan per host
+- Fix: `hunt-jwt.sh` was missing from default hunt loop (now included)
+
+## [1.1.0] — 2026-04-19
+
+### Added — Modern fuzzing stack integration (+4 hunters → 21 total)
+
+- `hunt-dalfox-xss.sh` — katana + gau URL collection → gf xss filter →
+  dalfox pipe scan (Reflected + Blind via DALFOX_BLIND_URL/interactsh +
+  custom DALFOX_PAYLOADS file). Authenticated via DALFOX_COOKIE env
+- `hunt-arjun-params.sh` — Hidden GET/POST/JSON parameter discovery using
+  SecLists `burp-parameter-names.txt` (>6000 params). JSON output for
+  structured parsing. `ARJUN_HEADERS` / `ARJUN_COOKIES` for authenticated
+  scanning; passive mode (history-only) supported
+- `hunt-trufflehog-secrets.sh` — Deep .git history scan (100+ detectors:
+  AWS/GCP/GitHub/Stripe/SendGrid/...) on already-dumped git-dumper output.
+  `--only-verified` filter for high-confidence secrets only
+- `hunt-ffuf-dirs.sh` — 3-tier directory scanning (BB-high-ROI list →
+  SecLists raft-medium → API endpoints). Auto 404-size detection (`-fs`),
+  word-count filter (`-fw`), recursion on interesting paths.
+  `FFUF_COOKIE` / `FFUF_HEADERS` for authenticated dirs
+- `gf` pattern integration for downstream classification
+
+### Changed
+- bbflow.sh hunt loop now dispatches modern fuzzing tools per host
+- `WORKFLOW.md` updated with crawl-chain integration examples
+
 ## [1.0.0] — 2026-04-15
 
 ### Initial release

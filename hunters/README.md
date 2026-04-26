@@ -623,6 +623,275 @@ Severity hint:
 
 ---
 
+---
+
+### hunt-config-leak.sh
+
+**目標**：政府站 / 防火牆後標的 — 100+ 路徑單發驗證，**WAF 極低觸發率**
+
+**機制**
+- 每個路徑只送 1 次 GET（不爆破）
+- 100+ 路徑全部用 content-match 驗證（不是 HTTP 200 就算 hit）
+- 涵蓋 xray 最穩的 PoC-none 規則：SCM、IDE、.env、backup、WEB-INF、Swagger、debug console
+- `FAST=1` 模式只跑 24 個 P1/P2 高信心路徑
+
+**範例輸出**
+```
+🔴 https://target/.env (size=412, content-match: AWS_ACCESS_KEY_ID=AKIA...)
+🟡 https://target/.git/config (size=98, content-match: [remote])
+✅ https://target/swagger-ui.html (size=2891, content-match: <title>Swagger UI</title>)
+```
+
+**用法**
+- `./hunt-config-leak.sh https://target` — 全 100+ 路徑
+- `FAST=1 ./hunt-config-leak.sh https://target` — 只 P1/P2
+
+---
+
+### hunt-weak-login.sh
+
+**目標**：25+ vendor 預設帳密驗證 — **不是爆破**，是 default creds 確認
+
+**機制**
+- 每個 vendor 只送 1–3 次 login request
+- 先 HEAD/GET 確認 vendor 面板存在才發 login
+- 差異判斷（login 成功 vs 失敗的 HTTP/body signature）
+- Fail-safe：2xx login response 仍要配 body pattern 才算 hit
+
+**覆蓋 vendor**：Nacos / Druid / Grafana / Jenkins / phpMyAdmin / Tomcat Manager / Solr Admin / RabbitMQ / Kibana / Jeecg / Jeesite / SpringBoot Admin / Apollo / GitLab / Gitea / Portainer / Rancher / Harbor / Nexus / SonarQube / Weblogic / Zabbix / Shiro / Airflow / Superset / Metabase / Couchbase
+
+**範例輸出**
+```
+🔴 Nacos default creds: nacos:nacos → 200 OK + accessToken (https://target:8848/nacos/v1/auth/login)
+🔴 phpMyAdmin: root:root → server_status.php accessible
+✅ Grafana: admin:admin → 401 (不是 default)
+```
+
+---
+
+### hunt-backup-files.sh
+
+**目標**：洩漏的 backup 檔案 — 多層命名 + Index-of fallback
+
+**機制**
+1. 靜態候選：常見 backup.zip / www.tar.gz / db.sql 等 40 個命名
+2. 動態候選：從 target hostname 衍生（target.com.zip / target.tar.gz / target.sql）
+3. Index-of 列表 fallback：/backup/、/backups/、/bak/、/db/、/upload/
+4. Content-type + size 雙驗證（避免 SPA 200 HTML 當 hit）
+
+**範例輸出**
+```
+🔴 https://target/db.sql (Content-Type: application/sql, size=2.4MB)
+🔴 https://target/backups/ (Index-of listed: prod_2024.tar.gz, dev.sql)
+🟡 https://target/target.com.zip (200, Content-Type: text/html — likely false positive)
+```
+
+**用法**
+- `./hunt-backup-files.sh https://target` — 預設 40 候選
+- `./hunt-backup-files.sh https://target extra1 extra2` — 附加自訂候選
+
+---
+
+### hunt-nuclei-deep.sh
+
+**目標**：分類 nuclei scan — 比預設 template miss 少
+
+**覆蓋分類**：XSS / SQLi / SSRF / LFI / RCE / Path Traversal / Info Leak / Debug / Weak login / Default cred / Exposed panels / Misconfig / CVE / Takeover / CORS / Open Redirect / SSTI / XXE
+
+**機制**
+- 每個類別獨立可關 (`CATEGORY=xss tools/hunters/hunt-nuclei-deep.sh ...`)
+- 自動整合 `bb-recon` 自訂 template（若存在）
+- 對 deep surface 比預設 template 命中率高（用更精準 tag）
+
+**範例輸出**
+```
+🔴 [XSS][high] /login?next=javascript:alert(1)
+🔴 [Misconfig][medium] /actuator/env exposed
+🟡 [Info-Leak][low] X-Powered-By: Express in headers
+```
+
+---
+
+### hunt-waf-bypass.sh
+
+**目標**：找 WAF 可繞的路徑 — 為後續 hunter 鋪路
+
+**機制**
+1. wafw00f 識別 WAF 廠商（Cloudflare / AWS / Akamai / Imperva / F5 / ...）
+2. 對 /admin、/login、/api 等常被擋路徑試 15+ bypass 技巧
+3. 記錄能通過的 bypass 手法 → 給後續 hunter 套用
+
+**Bypass 技巧**：path case mutation / nullbyte / unicode / chunked encoding / Origin header spoof / X-Forwarded-For / Host header / extra dots / parameter pollution / etc.
+
+**範例輸出**
+```
+🔴 WAF: Cloudflare detected
+🔴 Bypass: /Admin (case mutation) → 200 OK (vs /admin 403)
+🔴 Bypass: X-Forwarded-For: 127.0.0.1 → /api/internal accessible
+✅ /login: no bypass works (all variants 403)
+```
+
+**用法**
+- `./hunt-waf-bypass.sh https://target` — 預設路徑
+- `PATHS='/admin,/api/users' ./hunt-waf-bypass.sh https://target` — 自訂路徑
+- `ORIGIN_IP=1.2.3.4 ./hunt-waf-bypass.sh https://target` — 直連 origin（繞 CDN）
+
+---
+
+### hunt-crawl-chain.sh
+
+**目標**：完整 URL discovery + DAST 一條龍
+
+**10 階段流水線**
+1. **katana** — 動態 JS-aware crawl（深度 3，headless）
+2. **gau** — wayback + otx + commoncrawl + urlscan 歷史 URL
+3. **waybackurls** — gau fallback
+4. **paramspider** — 從 Wayback 抽 param-only URLs
+5. **hakrawler** (optional) — SPA 快速 crawl
+6. **uro** — 合併去重（相同 param pattern 只留一筆）
+7. **gf** 分類 — xss / sqli / ssrf / lfi / ssti / redirect / idor
+8. **arjun** — 對每個 endpoint 找隱藏 param
+9. **nuclei DAST** — 按 gf 分類跑對應漏洞 templates
+10. **dalfox** — xss.txt 的 URL 深度 XSS scan
+
+**範例輸出**
+```
+[1] katana: 1247 URLs crawled
+[2] gau: 8932 historical URLs
+[6] uro: 2103 unique param patterns
+[7] gf classified: xss=87, sqli=12, ssrf=34, lfi=21
+[8] arjun: 47 hidden params discovered
+[9] nuclei DAST hits: XSS=3, SQLi=1, SSRF=2
+🔴 Reflected XSS: /search?q=<svg/onload=alert(1)>
+```
+
+**用法**
+- `tools/hunters/hunt-crawl-chain.sh https://target.com`
+- `DEPTH=5 tools/hunters/hunt-crawl-chain.sh https://target.com` — 更深 crawl
+
+---
+
+### hunt-dalfox-xss.sh
+
+**目標**：深度 XSS scan（reflected + blind + custom payload）
+
+**機制**
+- katana + gau 收集 URL
+- gf xss pattern filter（只打 xss-prone params）
+- dalfox pipe scan：reflected XSS + blind XSS（需 `DALFOX_BLIND_URL`） + 自訂 `DALFOX_PAYLOADS` file
+
+**用法**
+- `OUT_DIR=/path DALFOX_BLIND_URL=https://your.oast.fun ./hunt-dalfox-xss.sh <url>`
+- `OUT_DIR=/path DALFOX_COOKIE="session=xxx" ./hunt-dalfox-xss.sh <url>` — authenticated
+
+---
+
+### hunt-arjun-params.sh
+
+**目標**：發現隱藏 GET/POST/JSON parameter
+
+**改進**
+- 使用 SecLists `burp-parameter-names.txt`（>6000 params）
+- JSON output for structured parsing
+- GET + POST + JSON 三種方法
+- 支援 authenticated 掃描（`ARJUN_HEADERS` / `ARJUN_COOKIES`）
+- Passive mode（只查歷史資料，不主動掃描）
+
+**範例輸出**
+```
+🔴 GET /api/users: hidden param `admin=true` → 200 OK with extra fields
+🔴 POST /login: hidden param `_method=PUT` → bypass auth
+🟡 JSON /api/v2/data: 3 candidate params (debug, raw, internal) — needs manual verify
+```
+
+**用法**
+- `OUT_DIR=/path ARJUN_HEADERS="Authorization: Bearer xxx" ./hunt-arjun-params.sh <url>`
+
+---
+
+### hunt-trufflehog-secrets.sh
+
+**目標**：對 dump 過的 .git repo 做深度 secret scan
+
+**vs hunt-git-exposure 的 grep 差異**
+- 掃所有 commit history（含已刪除的 secrets）
+- 100+ 種 detector（AWS/GCP/GitHub/Stripe/SendGrid/Twilio/Slack/...）
+- 只報驗證成功的（`--only-verified`）— 高信心，無 FP
+
+**範例輸出**
+```
+🔴 AWS Access Key (verified): AKIAIOSFODNN7EXAMPLE in commit a1b2c3d (2 years ago)
+🔴 GitHub Token (verified): ghp_xxxxx in commit f4e5d6 (delete-then-leaked)
+✅ Stripe key found but unverified (revoked)
+```
+
+**用法**：必須先跑 `hunt-git-exposure.sh` dump 完成
+- `OUT_DIR=/path ./hunt-trufflehog-secrets.sh <url>`
+
+---
+
+### hunt-ffuf-dirs.sh
+
+**目標**：3 層目錄/檔案 fuzzing
+
+**機制**
+- 自動偵測 404 response size → `-fs` 過濾（減少 FP）
+- 三層掃描：BB-high-ROI list → SecLists raft-medium → API endpoints
+- `-recursion` 對有趣路徑深入
+- `-fw` 過濾 word count
+- 支援 `FFUF_COOKIE` / `FFUF_HEADERS` 做 authenticated 掃描
+
+**範例輸出**
+```
+🔴 /admin (200, size=2891)
+🔴 /api/internal/v2 (200, size=487, no auth required)
+🟡 /backup (403, size=12) — 檔案存在但被擋
+```
+
+**用法**
+- `OUT_DIR=/path FFUF_COOKIE="session=xxx" ./hunt-ffuf-dirs.sh <url>`
+
+---
+
+### hunt-portscan.sh
+
+**目標**：Port scan + service detection
+
+**Pipeline**
+- rustscan (fast SYN) → nmap (service/version on open ports)
+- Falls back to nmap-only if rustscan not installed
+
+**自動標 🔴 的 service**：Docker API（2375/2376）、Redis（6379）、Elasticsearch（9200）、Mongo（27017）、Consul（8500）、etcd（2379）、K8s API（6443/8443）
+
+**範例輸出**
+```
+🔴 Open: 2375/tcp Docker API (no TLS, no auth)
+🔴 Open: 6379/tcp Redis 6.0.16 (no auth)
+🟡 Open: 22/tcp OpenSSH 8.4 (default port)
+✅ Open: 443/tcp nginx 1.18.0 (TLS, expected)
+```
+
+**用法**
+- `OUT_DIR=/path ./hunt-portscan.sh <url-or-ip>`
+
+---
+
+### hunt-param-fuzz.sh
+
+**目標**：parameter fuzzing pipeline（站點層 DAST）
+
+**流程**
+1. katana 爬頁面（JS-aware，depth 3）
+2. gau / waybackurls / Wayback CDX API 抓歷史 URL
+3. uro 去重（相同 param pattern 的 URL 只保留一個）
+4. 過濾出有 query param 的 URL
+5. nuclei `--dast` 跑 XSS / SQLi / SSRF / LFI / SSTI / Open-redirect
+
+**用法**
+- `OUT_DIR=/path/to/out ./hunt-param-fuzz.sh <url>`
+
+---
+
 ## 失敗模式 / 注意事項
 
 | 現象 | 原因 | 修正 |

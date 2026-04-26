@@ -2,7 +2,7 @@
 
 統一的 bug bounty 偵察 + pattern hunter 工具鏈。**零 LLM 依賴**，純 `bash + curl + python3 stdlib`。
 
-BBOT / Osmedeus 負責 recon，22 個 pattern hunter 負責驗證。完全獨立執行，不依賴特定資料夾結構。
+BBOT / Osmedeus 負責 recon，28 個 pattern hunter 負責驗證。完全獨立執行，不依賴特定資料夾結構。
 
 ---
 
@@ -145,7 +145,7 @@ bbflow flow target.com
 
 # 或分開跑
 bbflow recon target.com          # BBOT subdomain enum + live probe
-bbflow hunt target.com           # 全 22 hunters
+bbflow hunt target.com           # 全 28 hunters
 bbflow hunt target.com --only cors,graphql,envdata   # 指定 hunters
 ```
 
@@ -216,7 +216,7 @@ Bundled binaries：
 
 ---
 
-## 22 個 Hunters
+## 28 個 Hunters
 
 | Hunter | 用途 | 案例 |
 |---|---|---|
@@ -246,6 +246,11 @@ Bundled binaries：
 | `trufflehog` | git history 100+ detector secret scan | `--only-verified` |
 | `ffuf-dirs` | 3 層 dir fuzzing + BB-ROI wordlist；feroxbuster fallback | dir/file exposure |
 | `portscan` | rustscan → nmap service detection；Docker API/Redis/ES/Mongo/Consul 自動標 🔴 | port scan + service detection |
+| `config-leak` | 100+ 路徑 single-shot content-match；FAST=1 P1/P2 only（24 paths） | WAF-friendly gov/firewall sites |
+| `weak-login` | 25+ vendor default creds (Nacos/Druid/Grafana/Jenkins/phpMyAdmin/...)；differential body match | default creds 驗證 |
+| `backup-files` | 40 static names + hostname-derived (target.com.zip/sql) + Index-of fallback；content-type+size dual verify | backup leak hunting |
+| `waf-bypass` | wafw00f + 15+ bypass (path mutation/nullbyte/unicode/Origin/X-Forwarded-For)；ORIGIN_IP= 直連 origin | WAF-protected target |
+| `crawl-chain` | 10-stage URL discovery + DAST (katana→gau→waybackurls→paramspider→hakrawler→uro→gf→arjun→nuclei→dalfox) | full SPA/API fuzz pipeline |
 
 ✅ = 對真實目標實測重現。詳見 [`hunters/README.md`](hunters/README.md)。
 
@@ -266,7 +271,7 @@ bbflow/                      (這個 repo)
 ├── bin/
 │   └── bbot                 bbot wrapper（pipx/~/.local/bin 自動偵測）
 ├── hunters/
-│   ├── hunt-*.sh            22 個 hunters
+│   ├── hunt-*.sh            28 個 hunters
 │   └── README.md            每個 hunter 範例輸出 + 決策規則
 ├── nuclei-templates/
 │   ├── bb-recon/            27 個自訂 templates
