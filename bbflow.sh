@@ -1,10 +1,17 @@
 #!/usr/bin/env bash
-# bbflow.sh — 統一 Bug Bounty Flow CLI
+# bbflow.sh — 統一 Bug Bounty Flow CLI  v1.5.0
 # 零 LLM 依賴。所有 subcommand 都是 bash + curl + python3 stdlib。
+#
+# v1.5.0 (2026-04-30): workshop/ path fix + 3 new hunters + init delegates to init_target.sh
+#   - research/ → workshop/ (全域路徑修正，配合 workspace rename)
+#   - bbflow init 改委派 automation/init_target.sh（建 RECON_DB.md + SCOPE.md + FINDINGS_QUICK_REF.md）
+#   - 新 hunter: monitor-bypass (TP-S35/38 pattern — admin auth bypass)
+#   - 新 hunter: sms-static-cred (TP-S45 pattern — SMS gateway static credential probe)
+#   - 新 hunter: git-deep (TP-S47 pattern — .git object zlib extraction for credentials)
 #
 # 子命令：
 #   bbflow doctor                          檢查依賴與工具路徑
-#   bbflow init <target>                   建立 research/<target>/ + SCOPE.md 模板
+#   bbflow init <target>                   建立 workshop/<target>/ + SCOPE.md 模板
 #   bbflow recon <target> [--osmedeus]     執行 BBOT（預設）或 Osmedeus VPS recon
 #   bbflow hunt <target> [--only h1,h2]    對 live_hosts.txt 跑全部 hunters
 #   bbflow flow <target>                   recon + hunt + report 一條龍
@@ -12,20 +19,21 @@
 #   bbflow list                            列出所有 research 中的 target
 #   bbflow report <target>                 重新產生 HUNTERS_REPORT.md
 #   bbflow scope <target>                  顯示 SCOPE.md
+#   bbflow submit-checklist <platform>     輸出送件前檢查清單（hitcon / twcert）
 #
 # 設計原則：
 #   1. BBOT / Osmedeus 負責 recon（asset discovery）
 #   2. Hunters 負責 pattern-specific 驗證（confirmed-bounty patterns）
-#   3. 狀態存在 research/<target>/，不重複執行已完成的階段
+#   3. 狀態存在 workshop/<target>/，不重複執行已完成的階段
 #   4. 所有輸出符合 CLAUDE.md 的 scope-first 規範（先建 SCOPE.md 才 hunt）
 set -uo pipefail
 
 TOOLS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# ── Workspace: where research/, reports/, etc. are stored ──────
+# ── Workspace: where workshop/, reports/, etc. are stored ──────
 # Override with: export BBFLOW_WORKSPACE=/your/path
 # Default: current working directory ($PWD), so `cd ~/work && bbflow hunt t`
-# stores research at ~/work/research/
+# stores research at ~/work/workshop/
 BASE_DIR="${BBFLOW_WORKSPACE:-$(pwd)}"
 export BBFLOW_WORKSPACE="$BASE_DIR"
 
@@ -92,7 +100,7 @@ ${B}bbflow${N} — Unified Bug Bounty Flow CLI (零 LLM)
 ${B}Usage:${N}
   bbflow doctor                    檢查依賴
   bbflow test                      對 example.com 跑 null-case regression test
-  bbflow init <target>             初始化 research/<target>/ + SCOPE.md
+  bbflow init <target>             初始化 workshop/<target>/ + SCOPE.md
   bbflow recon <target> [--osmedeus]
   bbflow hunt <target> [--only h1,...]
   bbflow hunt --list <file> [--name <slug>] [--probe] [--only h1,...]
@@ -103,6 +111,7 @@ ${B}Usage:${N}
   bbflow list
   bbflow report <target>
   bbflow scope <target>
+  bbflow submit-checklist <hitcon|twcert>
   bbflow nuclei-update             更新官方 PD templates + clone Wordfence CVE repo
 
 ${B}Examples:${N}
@@ -112,15 +121,16 @@ ${B}Examples:${N}
   bbflow hunt target.example.com --only cors,graphql
   bbflow hunt --list hosts.txt --name my-prog --probe    # IP/domain/URL list 直打
   OSMEDEUS_VPS=user@1.2.3.4 bbflow recon target.example.com --osmedeus
+  bbflow submit-checklist hitcon
 
 ${B}Workspace:${N}
-  預設 research/ 建在執行 bbflow 的目錄（\$PWD）
+  預設 workshop/ 建在執行 bbflow 的目錄（\$PWD）
   覆蓋: export BBFLOW_WORKSPACE=/custom/path
   Bundled tools (nuclei/httpx/subfinder): tools/
   BBOT/Osmedeus wrappers: tools/bin/（放在 repo 裡即可）
 
 ${B}Directory layout:${N}
-  research/<target>/
+  workshop/<target>/
     SCOPE.md                       ← scope 定義（必須先手寫完整）
     bbot/subdomains.txt            ← BBOT 輸出
     bbot/live_hosts.txt            ← httpx 存活結果
@@ -180,6 +190,28 @@ ${B}28 Hunters (對應 confirmed bounty 案例 + 高 ROI pattern + WAF-friendly 
                    → PATHS=/admin,/api/v1 自訂測試路徑
                    → 自動測：X-Original-URL, XFF-127, 大小寫, //, ;, %00,
                      OPTIONS method, HTTP/2, localhost Host header
+  version-json     環境對映 JSON 洩漏（/json/version.json, /version.json, /json/config.json 等）
+                   → 揭露 dev/test/UAT/staging 主機名稱（EVERY8D TP-S18 pattern）
+                   → 標記含 .cc/.dev/.local 或內網 IP 的 value
+  cert-bypass      SSO /cert 端點無密碼 token 發行探測（EVERY8D TP-S32 pattern）
+                   → /login/cert, /auth/cert, /sso/cert, /api/cert 等端點
+                   → POST fake account → 偵測 token 發行 → verify on authenticated API
+                   → P1-CRIT if token works on real API endpoints
+  monitor-bypass   監控 / 管理後台 Auth Bypass 探測（TP-S35/38 pattern）
+                   → 目標：monitor.*/admin.*/manage.*/dashboard.* + Spring Boot /actuator
+                   → 測試：空帳密(aid=&pwd=)、admin/PASSWORD、admin/admin、admin/空白
+                   → 偵測：302 redirect to adminMain / 200 with dashboard content
+                   → P1-CRIT if authenticated content accessible
+  sms-static-cred  SMS Gateway 靜態憑證探測（TP-S45 pattern）
+                   → 目標：/sms, /api/sms, /sms/send, /send-sms 等端點
+                   → 測試：act=e8d 類型的固定 act 參數 + MD5 格式密碼（32 char hex）
+                   → 偵測：resp_status 成功 / HTTP 200 非 3xx redirect
+                   → 資訊洩漏點：.git config / JS bundle / 回應 body
+  git-deep         .git 物件深層提取（TP-S47 pattern，git-exposure 延伸）
+                   → git-exposure 確認 .git 暴露後繼續：HEAD → commit → tree → blob
+                   → zlib decompression：curl .git/objects/xx/yy → python3 zlib.decompress
+                   → 目標 blob：config.ini / .env / credentials / settings
+                   → P1-CRIT if production credentials extracted
 EOF
 }
 
@@ -187,7 +219,7 @@ EOF
 cmd_doctor() {
   echo "${B}== bbflow doctor ==${N}"
   ok  "TOOLS_DIR     → $TOOLS_DIR"
-  ok  "BBFLOW_WORKSPACE → $BASE_DIR  (research/ + reports/ live here)"
+  ok  "BBFLOW_WORKSPACE → $BASE_DIR  (workshop/ + reports/ live here)"
   [ -d "$TOOLS_DIR/bin" ] && ok "tools/bin/    → $(ls "$TOOLS_DIR/bin" | tr '\n' ' ')" \
                           || info "tools/bin/    not found (create to bundle bbot/osmedeus wrappers)"
   echo ""
@@ -281,7 +313,7 @@ cmd_doctor() {
 # ── cmd: list ─────────────────────────────────────────────────
 cmd_list() {
   if [ ! -d "$BASE_DIR/research" ]; then echo "(no research dir)"; return; fi
-  echo "${B}Targets in research/:${N}"
+  echo "${B}Targets in workshop/:${N}"
   for T in "$BASE_DIR/research"/*/; do
     [ -d "$T" ] || continue
     NAME=$(basename "$T")
@@ -299,13 +331,21 @@ cmd_list() {
 cmd_init() {
   local T="$1"
   [ -z "$T" ] && { err "usage: bbflow init <target>"; exit 1; }
-  local DIR="$BASE_DIR/research/$T"
-  mkdir -p "$DIR"
-  local SCOPE="$DIR/SCOPE.md"
-  if [ -f "$SCOPE" ]; then
-    warn "SCOPE.md exists → $SCOPE"
+  # Delegate to automation/init_target.sh (creates RECON_DB.md + SCOPE.md + FINDINGS_QUICK_REF.md)
+  local SCRIPT_DIR
+  SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+  local INIT_SCRIPT="$SCRIPT_DIR/automation/init_target.sh"
+  if [ -f "$INIT_SCRIPT" ]; then
+    bash "$INIT_SCRIPT" "$T"
   else
-    cat > "$SCOPE" <<EOF
+    # Fallback: just create the directory + SCOPE.md
+    local DIR="$BASE_DIR/workshop/$T"
+    mkdir -p "$DIR"
+    local SCOPE="$DIR/SCOPE.md"
+    if [ -f "$SCOPE" ]; then
+      warn "SCOPE.md exists → $SCOPE"
+    else
+      cat > "$SCOPE" <<EOF
 # ${T} Scope
 
 ## Platform
@@ -315,38 +355,85 @@ cmd_init() {
 
 ## In-Scope
 - *.${T}
-- api.${T}
-<-- 從 program 頁面複製完整清單，包含 wildcards -->
+<-- 從 program 頁面複製完整清單 -->
 
 ## Out-of-Scope (OOS)
-- Rate limiting / brute force
-- Email enumeration (standalone)
-- Source map exposure (standalone)
-- Self-XSS
-- XMLRPC enabled
 <-- 從 program 頁面複製完整 OOS 清單 -->
-
-## Submission Rules
-- Max reports per week: <N>
-- Minimum severity: <P5 / P4>
-- Language: <EN / ZH>
-
-## Known Tech Stack (from recon)
-<-- 填入 bbflow recon 之後的發現 -->
-
-## Previous Findings / Duplicates Risk
-<-- 送件前 grep disclosed hacktivity -->
 EOF
-    ok "initialized $SCOPE — 請先填完整 scope 再跑 recon"
+      ok "initialized $SCOPE — 請先填完整 scope 再跑 recon"
+    fi
   fi
 }
 
 # ── cmd: scope ────────────────────────────────────────────────
 cmd_scope() {
   local T="$1"
-  local SCOPE="$BASE_DIR/research/$T/SCOPE.md"
+  local SCOPE="$BASE_DIR/workshop/$T/SCOPE.md"
   [ -f "$SCOPE" ] || { err "no scope for $T (run: bbflow init $T)"; exit 1; }
   cat "$SCOPE"
+}
+
+# ── cmd: submit-checklist ──────────────────────────────────────
+cmd_submit_checklist() {
+  local PLATFORM="${1:-}"
+  [ -z "$PLATFORM" ] && { err "usage: bbflow submit-checklist <hitcon|twcert>"; exit 1; }
+  PLATFORM=$(echo "$PLATFORM" | tr '[:upper:]' '[:lower:]')
+
+  case "$PLATFORM" in
+    hitcon|zd|zeroday)
+      cat <<'EOF'
+== HITCON ZeroDay 送件前檢查 ==
+
+[欄位與格式]
+- 標題需用 {組織名稱} 包起來（平台會遮蔽）。
+- 只有「敘述(detail)」欄位支援 Markdown；其他欄位用純文字。
+- 類型/風險請按已驗證證據填，不用理論最壞情境硬拉高。
+
+[敘述內容]
+- 建議結構：漏洞概述 / 重現步驟 / 已驗證影響(Verified) / 潛在影響(Potential) / 修補建議。
+- 重現步驟要可直接執行（含完整 curl/URL/參數）。
+- 未 live verify 的內容需明確標示為條件式（若...則...）。
+
+[圖片與附件]
+- 平台實務上常要求上傳圖片，建議至少 1 張（最多 10 張，並符合大小限制）。
+- 在敘述內用 {{IMG#1}}、{{IMG#2}} 引用對應圖片。
+- README/清單提到的檔案必須都存在，避免 triager 找不到。
+
+[內容清理]
+- 外送版本禁止內部追蹤代碼（例如 TP-001、內部 advisory 編號）。
+- 避免貼出可直接濫用的有效帳密；必要時遮蔽敏感值。
+- 送前先做 duplicate/prior-art 比對，避免重複回報。
+EOF
+      ;;
+    twcert|cve)
+      cat <<'EOF'
+== TWCERT/CVE 送件前檢查 ==
+
+[是否適合申請 CVE]
+- 優先確認受影響版本為「使用者可控制」產品（client/firmware/on-prem）。
+- 純 SaaS 且使用者無法自行修補/緩解，通常不符合 CVE 發放條件。
+
+[欄位完整性]
+- 產品名稱、版本、廠商、官網、發現日期、CWE、CVSS 向量必填。
+- 漏洞描述要寫清楚：觸發條件、觸發方法、所需權限、C/I/A 影響。
+- 明確標記驗證日期與測試平台（如 Windows/macOS 差異）。
+
+[Rule 3 拆分原則]
+- 若 Bug A 修補時會一起修掉 Bug B，傾向合併為同一漏洞。
+- 可獨立修補、獨立觸發的路徑，再考慮拆成多筆。
+- 不確定是否可獨立修補時，先按同一漏洞處理並在說明註記。
+
+[內容清理]
+- 外送附件禁止內部追蹤代碼（TP-xxx、內部 pipeline ID）。
+- 附件清單與 ZIP 實際內容逐一比對，避免引用不存在檔案。
+- 影響描述維持可驗證事實，推測場景要用條件式描述。
+EOF
+      ;;
+    *)
+      err "unknown platform: $PLATFORM (use: hitcon or twcert)"
+      exit 1
+      ;;
+  esac
 }
 
 # ── cmd: recon ────────────────────────────────────────────────
@@ -360,7 +447,7 @@ cmd_recon() {
     esac
   done
 
-  local DIR="$BASE_DIR/research/$T"
+  local DIR="$BASE_DIR/workshop/$T"
   [ ! -d "$DIR" ] && { err "no dir for $T (run: bbflow init $T)"; exit 1; }
   [ ! -f "$DIR/SCOPE.md" ] && { err "no SCOPE.md — refusing to recon without scope"; exit 1; }
 
@@ -452,10 +539,10 @@ cmd_hunt() {
     # derive target slug from filename if --name not given
     [ -z "$T" ] && T="list_$(basename "$ABS_LIST" .txt | tr ' /' '__')"
 
-    mkdir -p "$BASE_DIR/research/$T/bbot" "$BASE_DIR/research/$T/hunters"
+    mkdir -p "$BASE_DIR/workshop/$T/bbot" "$BASE_DIR/workshop/$T/hunters"
 
     # Normalise: bare domain/IP → https://; strip trailing slash; dedup
-    python3 - "$ABS_LIST" > "$BASE_DIR/research/$T/bbot/live_hosts.txt" <<'NORM'
+    python3 - "$ABS_LIST" > "$BASE_DIR/workshop/$T/bbot/live_hosts.txt" <<'NORM'
 import re, sys
 path = sys.argv[1]
 seen = set()
@@ -472,14 +559,14 @@ for raw in open(path):
 NORM
 
     local NORM_COUNT
-    NORM_COUNT=$(wc -l < "$BASE_DIR/research/$T/bbot/live_hosts.txt" | tr -d ' ')
-    info "list: $NORM_COUNT hosts normalised from $ABS_LIST → research/$T/bbot/live_hosts.txt"
+    NORM_COUNT=$(wc -l < "$BASE_DIR/workshop/$T/bbot/live_hosts.txt" | tr -d ' ')
+    info "list: $NORM_COUNT hosts normalised from $ABS_LIST → workshop/$T/bbot/live_hosts.txt"
 
     # Optional live probe (httpx / curl fallback)
     if [ "$PROBE" = "1" ]; then
       info "probing $NORM_COUNT hosts for live HTTP..."
-      local PROBE_IN="$BASE_DIR/research/$T/bbot/live_hosts.txt"
-      local PROBE_OUT="$BASE_DIR/research/$T/bbot/live_hosts_probed.txt"
+      local PROBE_IN="$BASE_DIR/workshop/$T/bbot/live_hosts.txt"
+      local PROBE_OUT="$BASE_DIR/workshop/$T/bbot/live_hosts_probed.txt"
       if [ -n "$HTTPX" ]; then
         "$HTTPX" -l "$PROBE_IN" -silent -threads 50 -timeout 8 -o "$PROBE_OUT" 2>/dev/null || true
       else
@@ -500,7 +587,7 @@ NORM
 
   [ -z "$T" ] && { err "usage: bbflow hunt <target> [--only h1,...]  OR  bbflow hunt --list <file> [--name <slug>] [--probe]"; exit 1; }
 
-  local DIR="$BASE_DIR/research/$T"
+  local DIR="$BASE_DIR/workshop/$T"
   local LIVE="$DIR/bbot/live_hosts.txt"
 
   # Auto-seed live_hosts.txt from target name when no recon / --list was run
@@ -578,6 +665,11 @@ EOF
   run_hunter backup-files  "$TOOLS_DIR/hunters/hunt-backup-files.sh"         host
   run_hunter nuclei-deep   "$TOOLS_DIR/hunters/hunt-nuclei-deep.sh"          host
   run_hunter waf-bypass    "$TOOLS_DIR/hunters/hunt-waf-bypass.sh"           host
+  run_hunter version-json  "$TOOLS_DIR/hunters/hunt-version-json.sh"         host
+  run_hunter cert-bypass   "$TOOLS_DIR/hunters/hunt-cert-bypass.sh"          host
+  run_hunter monitor-bypass "$TOOLS_DIR/hunters/hunt-monitor-bypass.sh"      host
+  run_hunter sms-static-cred "$TOOLS_DIR/hunters/hunt-sms-static-cred.sh"   host
+  run_hunter git-deep      "$TOOLS_DIR/hunters/hunt-git-deep.sh"             host
   # subdomain-takeover: feed individual hostnames (dig CNAME), skip live_hosts loop
   if want takeover; then
     info "hunter: takeover (per-subdomain)"
@@ -1006,7 +1098,7 @@ cmd_flow() {
 cmd_status() {
   local T="${1:-}"
   if [ -z "$T" ]; then cmd_list; return; fi
-  local DIR="$BASE_DIR/research/$T"
+  local DIR="$BASE_DIR/workshop/$T"
   [ ! -d "$DIR" ] && { err "no such target"; exit 1; }
   echo "${B}$T${N}"
   [ -f "$DIR/SCOPE.md" ] && ok "SCOPE.md ($(wc -l < $DIR/SCOPE.md | tr -d ' ') lines)" || warn "SCOPE.md not set (optional for hunt)"
@@ -1088,7 +1180,7 @@ cmd_test() {
 cmd_dedupe() {
   local T="$1"
   [ -z "$T" ] && { err "usage: bbflow dedupe <target>"; exit 1; }
-  local DIR="$BASE_DIR/research/$T"
+  local DIR="$BASE_DIR/workshop/$T"
   [ ! -d "$DIR/hunters" ] && { err "no hunters output for $T (run: bbflow hunt $T)"; exit 1; }
 
   echo "${B}== dedupe check: $T ==${N}"
@@ -1098,7 +1190,7 @@ cmd_dedupe() {
     info "no hits to dedupe"; return
   fi
 
-  # Sources to compare against: HITCON_ZeroDay_Reports/submited/, research/*/submited/, research/*/reports/
+  # Sources to compare against: HITCON_ZeroDay_Reports/submited/, workshop/*/submited/, workshop/*/reports/
   local COMPARE_PATHS=(
     "$BASE_DIR/HITCON_ZeroDay_Reports/submited"
     "$BASE_DIR/HITCON_ZeroDay_Reports/fixed"
@@ -1141,6 +1233,7 @@ case "$SUB" in
   list)           cmd_list;;
   report)         cmd_report "$@";;
   scope)          cmd_scope "$@";;
+  submit-checklist) cmd_submit_checklist "$@";;
   test)           cmd_test;;
   dedupe)         cmd_dedupe "$@";;
   nuclei-update)  cmd_nuclei_update;;
