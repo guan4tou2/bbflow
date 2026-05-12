@@ -28,6 +28,7 @@
 | `hunt-actuator-deep.sh` | **Spring Boot Actuator deep probe** | Spring Boot Actuator 深度：`/env` propertySources 提取 + `/configprops` + `/mappings` + `/beans` + `/httptrace`（洩漏 cookie/auth header）+ `/loggers` + `/jolokia` JMX + `--heapdump` 下載 + strings grep credentials |
 | `hunt-mcp-oauth-scope.sh` | **MCP OAuth scope mismatch pattern** | RFC 8414 OAuth discovery + MCP endpoint probe + JSON-RPC initialize + tools/list + `MCP_TOKEN` 認證後比對 consent screen 宣稱 scope vs 實際 write-level tool 差異 |
 | `hunt-hardcoded-js-secrets.sh` | **SPA hardcoded client secret pattern** | 對 live `.js` bundle grep 硬編碼密鑰（和 sourcemap hunter 互補，不需 .map）：AWS/AIza/GitHub/Stripe/Slack/JWT/Sentry/Mapbox/Twilio/clientSecret 等 19 種 pattern |
+| `hunt-ssrf-oracle-probe.sh` | **digiwin #76/#121/#122-124 K8s topology mapping**（[[Pattern - Blind SSRF Oracle Technique]]）| 對 SSRF endpoint 跑 5-baseline probe（HTTP_OK / REFUSED / AUTH_TCP / DNS_FAIL / TIMEOUT）+ 比對回應 unique signature → FULL/PARTIAL/WEAK/NONE oracle 分級 + cloud metadata（AWS/GCP/Azure）+ K8s cluster fingerprint。需用戶指定 endpoint（不會 auto-find） |
 | `hunt-nxdomain-corpus.sh` | **Starbucks NXDOMAIN**（External Writeups 2026） | 建立歷史 hostname 超集 → 過濾出 NXDOMAIN 候選 → 待遇到 Host-controllable proxy 時當 payload |
 | `hunt-param-fuzz.sh` | **DAST fuzzing pattern** | katana + gau + waybackurls URL 收集 → gf filter XSS/SQLi/SSRF → nuclei DAST templates 驗證 |
 | `hunt-dalfox-xss.sh` | **Reflected/Blind XSS pattern** | gf xss filter → dalfox 掃描（支援 blind XSS callback + cookie auth）+ payloads/xss-custom.txt |
@@ -41,6 +42,8 @@
 | `hunt-crawl-chain.sh` | **10 階段 URL/param discovery + DAST** | katana + gau + waybackurls + paramspider → uro 去重 → gf 分類（xss/sqli/ssrf/lfi/ssti/redirect）→ arjun 隱藏 param → nuclei DAST → dalfox XSS；`FAST=1` 略 arjun+dalfox |
 | `hunt-nuclei-deep.sh` | **擴充 nuclei 攻擊面（18 類別）** | XSS/SQLi/SSRF/LFI/RCE/Redirect/SSTI/XXE/Takeover/CORS/Info/Debug/Panel/WeakLogin/CVE/Misconfig/Cloud/OAST；`CATEGORY=xss,sqli` 指定類別；`FAST=1` 只跑 high/critical |
 | `hunt-waf-bypass.sh` | **WAF 繞過自動化測試** | 15+ 技巧自動測：大小寫、`//`、`;`、`%00`、`X-Original-URL`、XFF-127、X-Real-IP、Host localhost、OPTIONS method、HTTP/2、Origin IP 直連；`ORIGIN_IP=1.2.3.4` 自訂 origin，`PATHS=/admin` 自訂路徑 |
+| `hunt-version-json.sh` | **環境對映 JSON 洩漏**（EVERY8D TP-S18 pattern） | 9 候選路徑（`/json/version.json`、`/version.json`、`/json/config.json` 等）→ 解析 JSON → 標記 dev/test/UAT key 或 `.cc`/`.local`/RFC1918 value |
+| `hunt-cert-bypass.sh` | **SSO /cert 端點無密碼 token 發行**（EVERY8D TP-S32 pattern） | 10 個 cert/token 端點 → POST 假帳號（無密碼）→ 偵測 token 發行 → 二層驗證（token 打 `/announce`/`/isKYC` 等，確認 P1） |
 
 ## 使用方式
 
@@ -889,6 +892,98 @@ Severity hint:
 
 **用法**
 - `OUT_DIR=/path/to/out ./hunt-param-fuzz.sh <url>`
+
+---
+
+### hunt-version-json.sh
+
+**目標**：揭露 dev/test/UAT/staging 環境主機名稱的 JSON 對映檔案
+
+**機制**
+- 探測 9 候選路徑：`/json/version.json`、`/json/version_pmo.json`、`/json/config.json`、
+  `/version.json`、`/config.json`、`/api/version`、`/api/config`、
+  `/app/version.json`、`/static/version.json`
+- HTTP 200 + JSON body 才進入解析（避免 SPA HTML FP）
+- Python3 解析 JSON，走訪所有 key-value 對
+- 標記含 `develop`/`test`/`uat`/`staging`/`qa`/`sandbox`/`beta` 的 key 或 value
+- 額外標記 `.cc`/`.dev`/`.local`/`.internal` TLD 或 RFC 1918 IP（`10./192.168./172.16-31.`）
+
+**範例輸出（真實命中 — EVERY8D TP-S18）:**
+```
+[10:01:23] === version-json hunt: https://hs.e8d.tw ===
+🔴 version-json https://hs.e8d.tw/json/version.json key='develop' → value='dev-portalite.e8d.cc' [ENV MAPPING]
+🔴 version-json https://hs.e8d.tw/json/version.json key='test' → value='test-portalite.e8d.cc' [ENV MAPPING]
+🔴 version-json https://hs.e8d.tw/json/version.json key='localhost' → value='localhost' [ENV MAPPING]
+[10:01:25] === done → ./version_json_out/hs_e8d_tw.txt ===
+```
+
+**範例輸出（JSON 存在但無環境鍵）:**
+```
+🟡 version-json https://target/version.json → JSON exposed (no obvious env keys, manual review)
+     content: {"version":"1.2.3","build":"2026-04-01"}
+```
+
+**決策規則：**
+- **`.cc`/`.dev`/`.local` 主機名稱** → P3（洩漏內部基礎設施地圖，可橫向 pivot 到 dev/test 環境）
+- **`dev-*`/`test-*` 公開可訪問** → 立刻對 dev 主機跑 hunt-actuator-deep + hunt-git-exposure
+- **只含版本號（`"version":"1.2.3"`）** → P4 info disclosure，通常不送件
+- **內網 IP（10.x.x.x）** → P3（後端拓撲洩漏，可配合 SSRF 利用）
+- **常見於** PHP/Fat-Free Framework 應用（`hs.e8d.tw` 確認 pattern）
+- **後續**：把發現的 dev/test hostname 加進 BBOT recon 清單，往往能找到更多未加固的面板
+
+---
+
+### hunt-cert-bypass.sh
+
+**目標**：SSO multi-step 流程中間端點跳過密碼驗證（token 任意發行）
+
+**機制**
+1. HEAD 預檢（404 快速跳過，減少流量）
+2. POST fake 帳號（無密碼） → 偵測回應含 `token`/`session`/`jwt` 欄位且狀態 2xx 或 `"status":"200"`
+3. 用 Python3 走訪 JSON 找 token 值（支援巢狀 key）
+4. **Layer 2**：用取得的 token 打 7 個常見認證 API endpoint
+5. 若 API 回 200 且有實際資料（非 MSSQL error 397 等錯誤碼）→ 確認 P1-CRIT
+
+**探測端點**：`/login/cert`、`/auth/cert`、`/sso/cert`、`/api/cert`、`/token/cert`、
+`/oauth/cert`、`/user/cert`、`/session/cert`、`/api/v1/cert`、`/api/login/cert`
+
+**驗證端點**：`/isKYC`、`/announce`、`/api/announce`、`/e8d/announce`、
+`/api/user`、`/api/me`、`/api/profile`、`/user/info`
+
+**範例輸出（P1 確認 — EVERY8D TP-S32）:**
+```
+[10:05:11] === cert-bypass hunt: https://ext-api.e8d.tw ===
+🟡 cert endpoint responded with token-like data: https://ext-api.e8d.tw/login/cert [HTTP 200]
+[10:05:11]   body preview: {"status":"200","token":"eyJhbGciOiJIUzI1NiJ9..."}
+[10:05:11]   extracted token: eyJhbGciOiJIUzI1NiJ9... (len=142)
+🔴 [P1-CRIT] cert-bypass CONFIRMED: https://ext-api.e8d.tw/login/cert → token issued + /e8d/announce returned HTTP 200 with data
+[10:05:12]   issuance body: {"status":"200","token":"eyJ...","expire":3600}
+[10:05:12]   verify body (/e8d/announce): {"announcements":[{"id":1,"title":"公告內容..."}]}
+[10:05:12] === done → ./cert_bypass_out/ext-api_e8d_tw.txt ===
+```
+
+**範例輸出（token 發行但無法驗證）:**
+```
+🟡 [P3] cert endpoint issued token but verify endpoints rejected it or returned errors → token may be for real accounts only
+🟡   endpoint: https://target/login/cert  token: eyJhbGciOiJIUzI1...
+🟡   manual: try with a known real account to confirm bypass
+```
+
+**範例輸出（無 cert 端點）:**
+```
+[10:05:11] === cert-bypass hunt: https://target.example.com ===
+[10:05:15] === done → ./cert_bypass_out/target_example_com.txt ===
+(空白 — HEAD 全 404，快速跳過)
+```
+
+**決策規則：**
+- **Layer 2 確認（token 打 authenticated API 回 200 + 資料）** → **P1-CRIT**（任意帳號獲 session → 完整繞過認證）
+- **token 發行但 verify endpoints 全拒** → P3（token 格式合法但後端可能只接受真實帳號，需手動測試）
+  - 手動：用一個已知真實帳號的名稱（不需密碼）重試
+- **MSSQL error 397 on verify** → 帳號不存在（EVERY8D 特有 user-enum differential），真實帳號會回資料
+- **cert endpoint 只接受 POST JSON** → 若 HEAD 回 405 仍值得 POST 測試（HEAD 可能不支援）
+- **含 SSO 的 B2B / 企業入口** → cert bypass pattern 出現率高，優先測試
+- **送件格式**：附 issuance request/response + verify request/response 兩組完整 curl
 
 ---
 
