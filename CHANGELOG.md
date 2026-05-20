@@ -5,6 +5,75 @@ All notable changes to bbflow will be documented in this file.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/),
 versioning follows [Semantic Versioning](https://semver.org/).
 
+## [Unreleased] — 2026-05-20
+
+### Added
+- External scope v1 contract: `scope.yaml` / `scope.json` with `schema_version: 1`,
+  `in_scope`, `out_of_scope`, `scan_level`, and `rate_limit`. `bbflow` preserves the
+  original scope file, generates a normalized `SCOPE.md`, and writes
+  `scope_contract.json` for automation consumers.
+- Machine-readable candidate schema v1: `run_manifest.json` now records
+  `candidate_schema_version` and `candidate_schema_fields`; `candidates.jsonl`
+  rows include `candidate_id`, `hunter`, `vuln_class`, `confidence`,
+  `dedupe_key`, `artifact_refs`, and `triage_status`.
+- Standard external deployment policy: single VPS + Docker compose + cron, with
+  `--allow-no-scope` retained only for explicitly authorized internal / dry-run use.
+- Recon ladder v1 documentation: domain seed → asset discovery → fingerprint →
+  path discovery → endpoint discovery → CVE/template scan → attack entrypoint.
+- Nuclei template lifecycle: validate, example.com null-case, scoped live canary,
+  false-positive review, promote, and Vault/bbflow 回寫.
+
+### Changed
+- `bbflow recon`, `hunt`, and `flow` keep scope-first enforcement while accepting
+  `--scope-file scope.yaml` / `scope.json` as first-class inputs.
+- `bbflow recon --osmedeus` now prefers the VPS `tools/vps/bbflow-vps.sh standard`
+  wrapper / `bbflow-safe` flow instead of the legacy generic Osmedeus command, and
+  uses `BBFLOW_REMOTE_ROOT` (default `~/bbflow`) instead of a Vault/workspace-specific path.
+- README and wiki now document the v1 automation contract, deployment baseline,
+  standalone runtime boundary, and wiki sanitization gate.
+
+## [1.5.0] — 2026-04-29
+
+### Added — TeamPlus/EVERY8D campaign patterns (+2 hunters → 30 total)
+
+Patterns generalised from TeamPlus rounds 60–72 (advisory TP-S18, TP-S32):
+
+- `hunt-version-json.sh` — Environment mapping JSON leak probe
+  - Checks 9 common paths: `/json/version.json`, `/json/version_pmo.json`,
+    `/json/config.json`, `/version.json`, `/config.json`, `/api/version`,
+    `/api/config`, `/app/version.json`, `/static/version.json`
+  - Parses JSON and flags keys/values matching dev/test/uat/staging/qa/sandbox
+  - Extra flag for internal indicators: `.cc`/`.dev`/`.local` TLDs, RFC 1918 IPs
+  - Pattern origin: `hs.e8d.tw/json/version.json` → `{"develop":"dev-portalite.e8d.cc","test":"test-portalite.e8d.cc"}`
+
+- `hunt-cert-bypass.sh` — SSO /cert endpoint passwordless token issuance probe
+  - Tests 10 common cert/token endpoints: `/login/cert`, `/auth/cert`, `/sso/cert`,
+    `/api/cert`, `/token/cert`, `/oauth/cert`, `/user/cert`, `/session/cert`,
+    `/api/v1/cert`, `/api/login/cert`
+  - Layer 1: POST fake account (no password) → detect token in response
+  - Layer 2: Verify token against authenticated API endpoints (`/isKYC`, `/announce`,
+    `/api/announce`, `/e8d/announce`, `/api/me`, `/api/profile`, `/user/info`)
+  - P1-CRIT confirmed only when token returns HTTP 200 with real data on verified endpoint
+  - Pattern origin: `ext-api.e8d.tw/login/cert` → accepts any account name → returns
+    session token; confirmed on `/e8d/announce` (real accounts 200+data, fake 200+MSSQL 397)
+
+### Changed
+- `hunt-git-exposure.sh` — Two new post-confirmation checks on hosts with `.git` exposure:
+  1. Weak date-based token endpoint: tries `/getip?token=<base64(MM/DD/YYYY)>` and flags
+     if response contains `function getip` / IP address response (EVERY8D CDN pattern)
+  2. `/json/version.json` cross-check: if `.git` is exposed, also probe version.json
+     (co-occurrence pattern from EVERY8D `js.e8d.tw`)
+- `bbflow.sh` help text updated with `version-json` and `cert-bypass` entries
+- `bbflow.sh` hunt dispatch: 28 → 30 hunters (added version-json + cert-bypass)
+
+### Lessons learned from TeamPlus campaign (rounds 60–72)
+- SSO multi-step flows may skip auth on intermediate endpoints — test each step independently
+- Version/config JSON at `/json/*.json` is a PHP/FFF framework convention worth probing always
+- `.git` exposure and weak token endpoints often co-occur on CDN/static sub-hosts of the same org
+- Date-based tokens (`btoa(MM/DD/YYYY)`) are a recurring pattern in legacy Taiwanese web apps
+- Error code differential in login failures (`(LvXx)` suffix) is a reliable user-enum signal even
+  when HTTP status and body structure look identical (add to hunt-user-enum.sh future work)
+
 ## [1.4.0] — 2026-04-25
 
 ### Added — WAF-friendly low-noise wave (+6 hunters → 28 total)

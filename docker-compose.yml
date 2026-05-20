@@ -6,7 +6,7 @@ services:
     tty: true
     working_dir: /workspace
     volumes:
-      # workspace: research/ + reports/ stored here (default: current dir)
+      # workspace: workshop/ + reports/ stored here (default: current dir)
       - ${BBFLOW_WORKSPACE:-.}:/workspace
       # optional: mount host nuclei-templates to avoid re-downloading
       # - ${HOME}/nuclei-templates:/root/nuclei-templates

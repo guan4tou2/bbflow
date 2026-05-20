@@ -5,15 +5,24 @@
 ## 設計原則
 
 1. **BBOT / Osmedeus 做 recon**（子域名、存活、技術指紋、cloud bucket、badsecrets）
-2. **Hunters 消費 recon 輸出**（`recon/<target>/bbot/live_hosts.txt`）
+2. **Hunters 消費 workshop 輸出**（`workshop/<target>/bbot/live_hosts.txt`）
 3. **每個 hunter 對應一個確認有 bounty 的 pattern**
 4. **沒有猜測、沒有 LLM — 只有 curl + 條件判斷 + differential**
+
+## Safety / VPS Gate
+
+完整規範見 [`../BBFLOW_OPERATIONS.md`](../BBFLOW_OPERATIONS.md)。
+
+- `bbflow recon` / `bbflow hunt` / `bbflow flow` 預設 **VPS required**。
+- `osmedeus` 一律 **VPS required**；本機只設定 `OSMEDEUS_VPS` 讓 wrapper 透過 SSH 在 VPS 執行。
+- Local OK 僅限 `bbflow doctor/status/list/scope/report/dedupe/init`、讀既有 `workshop/<target>` 輸出、寫報告。
+- 自動化掃描不用逐條記每個 request，但要在 `workshop/<target>/RECON_DB.md ## 📋 Operation Log` 記錄掃描開始/結束、來源 VPS IP、命令與輸出路徑。
 
 ## Hunter 對照表
 
 | Hunter | 來源案例 | 驗證什麼 |
 |--------|---------|---------|
-| `hunt-hybris-occ.sh` | **SAP Hybris OCC pattern**（research/target-example） | SAP Hybris OCC default OAuth creds + anonymous baseSites + anonymous cart create + GUID IDOR + configParam API keys |
+| `hunt-hybris-occ.sh` | **SAP Hybris OCC pattern**（workshop/target-example） | SAP Hybris OCC default OAuth creds + anonymous baseSites + anonymous cart create + GUID IDOR + configParam API keys |
 | `hunt-envdata.sh` | **SPA inline window config pattern** | `window.envData` / `__INITIAL_STATE__` / `ssInlineConfig` 提取 + AWS/Google/Sentry/Mapbox 密鑰 grep |
 | `hunt-sourcemap-secrets.sh` | **multi-brand SSO / disclosed source map cases** | `.js.map` 暴露 + `sourcesContent` 內 API key / Bearer / Stripe / JWT grep |
 | `hunt-cors-reflect.sh` | **reflective CORS pattern** (public writeup) | 四層反射 CORS：arbitrary / null / regex prefix bypass / suffix bypass + credentials:true 判斷 |
@@ -66,7 +75,7 @@
 ### 批次（從 BBOT 輸出）
 
 ```bash
-cat recon/<target>/bbot/live_hosts.txt | while read h; do
+cat workshop/<target>/bbot/live_hosts.txt | while read h; do
   ./tools/hunters/hunt-envdata.sh "$h"
 done
 ```
@@ -76,10 +85,10 @@ done
 使用 `bbflow` 主 CLI（詳見 [../README.md](../README.md)）：
 
 ```bash
-bbflow hunt target.com                     # 對 live hosts 跑全部 hunters → HUNTERS_REPORT.md
-bbflow flow target.com                     # init + recon + hunt 一條龍
-bbflow hunt target.com --only cors,graphql # 指定 hunters
-bbflow hunt --list hosts.txt --probe       # 清單模式
+bbflow hunt target.com                     # VPS required：對 live hosts 跑全部 hunters → HUNTERS_REPORT.md
+bbflow flow target.com                     # VPS required：init + recon + hunt 一條龍
+bbflow hunt target.com --only cors,graphql # VPS required：指定 hunters
+bbflow hunt --list hosts.txt --probe       # VPS required：清單模式 + live probing
 ```
 
 ## 環境需求
@@ -93,7 +102,7 @@ pipx install bbot
 which httpx subfinder waymore gau
 ```
 
-Osmedeus VPS 模式：
+Osmedeus VPS 模式（VPS required）：
 
 ```bash
 export OSMEDEUS_VPS="user@167.71.x.x"
@@ -103,7 +112,7 @@ bbflow recon target.com --osmedeus
 ## 輸出結構
 
 ```
-recon/<target>/
+workshop/<target>/
 ├── bbot/
 │   ├── subdomains.txt
 │   └── live_hosts.txt

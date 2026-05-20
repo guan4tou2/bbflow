@@ -2,11 +2,23 @@
 
 統一的 bug bounty 偵察 + pattern hunter 工具鏈。**零 LLM 依賴**，純 `bash + curl + python3 stdlib`。
 
-BBOT / Osmedeus 負責 recon，28 個 pattern hunter 負責驗證。完全獨立執行，不依賴特定資料夾結構。
+BBOT / Osmedeus 負責 recon，47 個 pattern hunter 負責驗證。完全獨立執行，不依賴特定資料夾結構。
 
 ---
 
-## 快速安裝
+## Standalone runtime boundary
+
+bbflow 是 standalone CLI，不是 Vault plugin。Runtime **MUST NOT require Vault**、**MUST NOT require LLM**：任何人只拿 bbflow repo，也應能用 Docker、Docker compose、cron 或 `install.sh --all` 執行掃描。Vault 是 optional integration；Vault adapter 只能在掃描完成後讀取 machine-readable output，包含 `run_manifest.json`、`candidates.jsonl`、`SCOPE.md` 與 `scope_contract.json`。
+
+環境邊界：
+- `BBFLOW_WORKSPACE`：本地輸出根目錄，預設目前工作目錄；產物在 `workshop/<target>/`。
+- `BBFLOW_REMOTE_ROOT`：VPS 上 bbflow repo 位置，預設 `~/bbflow`。
+- machine-readable output 是 integration contract；Markdown report 只給人讀。
+- Vault adapter 可以整理結果回 Vault，但 bbflow runtime 不讀 Vault Markdown、不需要 graphify、不需要 LLM context。
+
+---
+
+## 快速部署 / 快速安裝
 
 ### Docker（零本地依賴）
 
@@ -19,12 +31,12 @@ curl -sO https://raw.githubusercontent.com/guan4tou2/bbflow/main/bbflow-docker.s
 chmod +x bbflow-docker.sh
 
 ./bbflow-docker.sh doctor
-./bbflow-docker.sh hunt target.com --only cors,graphql
-./bbflow-docker.sh hunt --list hosts.txt --probe
-./bbflow-docker.sh flow target.com
+./bbflow-docker.sh hunt target.com --scope-file scope.yaml --only cors,graphql
+./bbflow-docker.sh hunt --list hosts.txt --scope-file scope.yaml --probe
+./bbflow-docker.sh flow target.com --scope-file scope.yaml
 ```
 
-research/ 輸出在執行目錄（自動掛載 `$(pwd):/workspace`）。
+輸出在執行目錄的 `workshop/` 結構中（自動掛載 `$(pwd):/workspace`）。
 
 **auth env vars 直接 export 後執行即可：**
 ```bash
@@ -44,6 +56,28 @@ git clone https://github.com/guan4tou2/bbflow.git && cd bbflow
 docker compose run --rm bbflow hunt target.com
 # 或自行 build：
 docker compose build && docker compose run --rm bbflow doctor
+```
+
+### 標準部署：單 VPS + Docker compose + cron
+
+bbflow 的標準外部部署先固定為 **單 VPS + Docker compose + cron**。VPS 保存 `compose.yaml`、`scope.yaml`、`hosts.txt` 與 `logs/`，cron 只呼叫穩定的 Docker compose 命令：
+
+```bash
+mkdir -p ~/bbflow-runs/logs
+cd ~/bbflow-runs
+vim compose.yaml
+vim scope.yaml
+vim hosts.txt
+
+docker compose run --rm bbflow doctor
+docker compose run --rm bbflow hunt --list hosts.txt --scope-file scope.yaml --name daily-safe --only nuclei-secrets,cors
+crontab -e
+```
+
+cron 範例：
+
+```cron
+15 2 * * * cd ~/bbflow-runs && docker compose run --rm bbflow hunt --list hosts.txt --scope-file scope.yaml --name daily-safe --only nuclei-secrets,cors >> logs/daily-safe.log 2>&1
 ```
 
 ---
@@ -67,6 +101,75 @@ export PATH="$HOME/.local/bin:$PATH"   # 加到 ~/.bashrc / ~/.zshrc
 ```
 
 支援：Ubuntu/Debian（apt）、Fedora/RHEL（dnf）、Arch（pacman）、macOS（brew）。
+
+---
+
+## wiki 更新與資料淨化
+
+bbflow 是零 LLM 依賴的獨立工具 repo；`tools/wiki/` 是給無 LLM 環境快速部署與操作的技術手冊，不保存 target-specific 資料。新增 hunter、Nuclei template、Osmedeus profile、VPS wrapper 或快速部署流程時，必須同步更新對應 wiki 頁與 `CHANGELOG.md`。
+
+最低同步規則：
+- 快速部署或安裝流程改變 → 更新本 README、`tools/wiki/00-bbflow-complete-flow.md`、`CHANGELOG.md`。
+- 新 hunter 或 hunter 行為改變 → 更新 `hunters/README.md`、對應 `tools/wiki/` 頁、`CHANGELOG.md`。
+- Nuclei template 收集或更新策略改變 → 確認 `bbflow nuclei-update` 文件仍正確，並更新對應 `tools/wiki/` 頁。
+- 從實戰學到的技巧回寫 bbflow → 只保留通用知識與技術，移除 target 名稱、host / IP、token / cookie / credential、raw log / screenshot / PoC。
+
+wiki 更新前先看 [`BBFLOW_OPERATIONS.md`](BBFLOW_OPERATIONS.md) 的 `wiki sanitization gate`。
+
+---
+
+## 外部自動化 contract
+
+bbflow 用於外部自動化找漏洞時，不依賴 Vault 或 LLM，但仍強制 scope-first：
+
+```bash
+bbflow hunt target.com --scope-file scope.yaml --only cors,graphql
+bbflow hunt --list hosts.txt --scope-file scope.yaml --name q1-scope --probe
+```
+
+建議外部 scope 使用 v1 schema，`scope.yaml` 或 `scope.json` 皆可。legacy `scope.md` 仍可用。
+
+```yaml
+schema_version: 1
+program: Example Program
+target: target.com
+scan_level: safe
+rate_limit: 5
+in_scope:
+  - target.com
+  - "*.target.com"
+out_of_scope:
+  - "admin.target.com"
+allowed_tools:
+  - bbot
+  - nuclei
+  - hunters
+```
+
+輸出給其他模組讀取：
+- `workshop/<target>/run_manifest.json` — run metadata，含 `schema_version`、`scope_file`、`scope_contract`、`candidate_schema_version`、`candidate_count`、artifact paths。
+- `workshop/<target>/candidates.jsonl` — candidate hits，每行一筆 JSON；v1 欄位含 `candidate_id`、`hunter`、`vuln_class`、`confidence`、`severity`、`dedupe_key`、`artifact_refs`、`triage_status`。
+- `HUNTERS_REPORT_*.md` — 人類閱讀用報告，不作為唯一 machine source。
+
+`--allow-no-scope` 只給明確授權的內部 / dry run 使用。
+
+---
+
+## Recon ladder v1
+
+bbflow 的標準流程是從 domain 到 path / endpoint，再到 CVE / known-vuln template 與 attack entrypoint：
+
+| 階段 | 目的 | 主要命令 |
+|---|---|---|
+| domain seed | 讀 v1 `scope.yaml` / `scope.json`，確定合法 target | `bbflow hunt --list hosts.txt --scope-file scope.yaml` |
+| asset discovery | subdomain / cloud asset / live host baseline | `bbflow recon <domain> --scope-file scope.yaml`、Osmedeus `bbflow-safe` |
+| fingerprint | title / status / tech / CDN/WAF / screenshot | BBOT httpx、Osmedeus fingerprint / screenshot |
+| path discovery | 歷史 URL、JS route、敏感路徑 | `wayback`, `config-leak`, `ffuf-dirs`, `crawl-chain` |
+| endpoint discovery | API endpoint、query param、hidden param | `param-fuzz`, `arjun-params`, Swagger hunter |
+| CVE / template scan | 已知漏洞、misconfig、exposure、WordPress CVE | `nuclei`, `nuclei-deep`, `nuclei-wp`, custom bb-recon |
+| attack entrypoint | 可接續攻擊的入口，先 candidate triage | targeted hunters + `candidates.jsonl` |
+
+WAF-safe mode：預設 **low-noise**、低 `rate-limit`、GET-first。payload mutation 只在 scope 明確允許時使用，例如 encoding、path normalization、header 差異或參數替換；**不得把 WAF bypass 當預設**，也不能用來規避 program policy 或 rate-limit。高噪音工具先寫 Operation Log，再從 VPS 執行。
 
 ---
 
@@ -131,22 +234,22 @@ bbflow doctor
 ### 基本流程（單一 target）
 
 ```bash
-# research/ 預設建在當前目錄；可用環境變數固定位置（一勞永逸）：
+# workshop/ 預設建在當前目錄；可用環境變數固定位置（一勞永逸）：
 # export BBFLOW_WORKSPACE=~/my-bugbounty-workspace
 
 # 初始化（建 SCOPE.md — scope-first 強制）
 bbflow init target.com
 
 # 填寫 SCOPE.md（必填）
-nano research/target.com/SCOPE.md
+nano workshop/target.com/SCOPE.md
 
 # 一條龍
-bbflow flow target.com
+bbflow flow target.com --scope-file scope.yaml
 
 # 或分開跑
-bbflow recon target.com          # BBOT subdomain enum + live probe
-bbflow hunt target.com           # 全 28 hunters
-bbflow hunt target.com --only cors,graphql,envdata   # 指定 hunters
+bbflow recon target.com --scope-file scope.yaml          # BBOT subdomain enum + live probe
+bbflow hunt target.com --scope-file scope.yaml           # 全部 hunter scripts
+bbflow hunt target.com --scope-file scope.yaml --only cors,graphql,envdata   # 指定 hunters
 ```
 
 ### List 輸入（IP / domain / URL 混合）
@@ -160,11 +263,11 @@ cat hosts.txt
 # 10.0.0.1:8443           ← 自動補 https://
 # # 這行被忽略
 
-bbflow hunt --list hosts.txt                     # 直接跑 hunters
-bbflow hunt --list hosts.txt --probe             # 先 httpx 探活再跑
-bbflow hunt --list hosts.txt --name q1-scope     # 自訂 research 目錄名稱
-bbflow hunt --list hosts.txt --only ffuf-dirs,cors --probe
-bbflow flow --list hosts.txt --name q1-scope     # 等同 hunt --list（略過 recon）
+bbflow hunt --list hosts.txt --scope-file scope.yaml                     # 直接跑 hunters
+bbflow hunt --list hosts.txt --scope-file scope.yaml --probe             # 先 httpx 探活再跑
+bbflow hunt --list hosts.txt --scope-file scope.yaml --name q1-scope     # 自訂 workshop 目錄名稱
+bbflow hunt --list hosts.txt --scope-file scope.yaml --only ffuf-dirs,cors --probe
+bbflow flow --list hosts.txt --scope-file scope.yaml --name q1-scope     # 等同 hunt --list（略過 recon）
 ```
 
 ### Authenticated scan
@@ -186,9 +289,25 @@ bbflow doctor               # 檢查所有依賴 + workspace 路徑
 bbflow status target.com    # 目前 target 進度
 bbflow list                 # 所有 target
 bbflow dedupe target.com    # 比對已送報告找重複
+bbflow submit-checklist hitcon   # 輸出 HITCON 送件檢查清單
+bbflow submit-checklist twcert   # 輸出 TWCERT/CVE 送件檢查清單
 bbflow nuclei-update        # 更新 PD templates + clone Wordfence CVE repo
 bbflow test                 # regression smoke test (example.com, 0 FP)
 ```
+
+---
+
+## 送件檢查（HITCON / TWCERT）
+
+```bash
+bbflow submit-checklist hitcon
+bbflow submit-checklist twcert
+```
+
+這個命令把實戰 triage 教訓固定成可重複檢查清單，重點包含：
+- HITCON：僅 `敘述(detail)` 支援 Markdown、圖片證據與 `{{IMG#N}}` 引用規則。
+- TWCERT：CVE 適用性（使用者可控制版本 vs 純 SaaS）、Rule 3 拆分原則。
+- 共通：`Verified` 與 `Potential` 分開寫、外送稿移除內部追蹤 ID、附件清單與 ZIP 實檔一致。
 
 ---
 
@@ -198,16 +317,16 @@ bbflow 完全獨立，不依賴任何特定父資料夾：
 
 ```
 TOOLS_DIR        = bbflow repo 本身（自動偵測）
-BBFLOW_WORKSPACE = research/ 和 reports/ 的存放位置
+BBFLOW_WORKSPACE = workshop/ 和 reports/ 的存放位置
                    預設: $PWD（執行 bbflow 的目錄）
                    覆蓋: export BBFLOW_WORKSPACE=/my/path
 ```
 
 ```bash
-# 範例: 在 ~/pentest-work/ 存放所有 research
+# 範例: 在 ~/pentest-work/ 存放所有 workshop output
 export BBFLOW_WORKSPACE=~/pentest-work
 bbflow hunt target.com
-# → 輸出在 ~/pentest-work/research/target.com/
+# → 輸出在 ~/pentest-work/workshop/target.com/
 ```
 
 Bundled binaries：
@@ -216,7 +335,7 @@ Bundled binaries：
 
 ---
 
-## 28 個 Hunters
+## 47 個 Hunters
 
 | Hunter | 用途 | 案例 |
 |---|---|---|
@@ -271,7 +390,7 @@ bbflow/                      (這個 repo)
 ├── bin/
 │   └── bbot                 bbot wrapper（pipx/~/.local/bin 自動偵測）
 ├── hunters/
-│   ├── hunt-*.sh            28 個 hunters
+│   ├── hunt-*.sh            47 個 hunter scripts
 │   └── README.md            每個 hunter 範例輸出 + 決策規則
 ├── nuclei-templates/
 │   ├── bb-recon/            27 個自訂 templates
@@ -280,7 +399,7 @@ bbflow/                      (這個 repo)
     └── xss-custom.txt       dalfox 自訂 XSS payloads
 
 $BBFLOW_WORKSPACE/           (預設 $PWD，可 export 覆蓋)
-└── research/
+└── workshop/
     └── <target>/
         ├── SCOPE.md          scope 定義（必填）
         ├── bbot/

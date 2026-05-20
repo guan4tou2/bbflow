@@ -25,7 +25,7 @@
 #   1. BBOT / Osmedeus 負責 recon（asset discovery）
 #   2. Hunters 負責 pattern-specific 驗證（confirmed-bounty patterns）
 #   3. 狀態存在 workshop/<target>/，不重複執行已完成的階段
-#   4. 所有輸出符合 CLAUDE.md 的 scope-first 規範（先建 SCOPE.md 才 hunt）
+#   4. 所有掃描命令 scope-first；先建 SCOPE.md 或傳入 --scope-file 才 hunt/recon/flow
 set -uo pipefail
 
 TOOLS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -94,6 +94,8 @@ info(){ echo "${C}→${N} $*"; }
 warn(){ echo "${Y}!${N} $*"; }
 
 usage() {
+  local HUNTER_COUNT
+  HUNTER_COUNT=$(find "$TOOLS_DIR/hunters" -maxdepth 1 -name 'hunt-*.sh' 2>/dev/null | wc -l | tr -d ' ')
   cat <<EOF
 ${B}bbflow${N} — Unified Bug Bounty Flow CLI (零 LLM)
 
@@ -101,11 +103,11 @@ ${B}Usage:${N}
   bbflow doctor                    檢查依賴
   bbflow test                      對 example.com 跑 null-case regression test
   bbflow init <target>             初始化 workshop/<target>/ + SCOPE.md
-  bbflow recon <target> [--osmedeus]
-  bbflow hunt <target> [--only h1,...]
-  bbflow hunt --list <file> [--name <slug>] [--probe] [--only h1,...]
-  bbflow flow <target>             recon + hunt + report 一條龍
-  bbflow flow --list <file> [--name <slug>] [--probe]
+  bbflow recon <target> [--scope-file SCOPE.md] [--osmedeus]
+  bbflow hunt <target> [--scope-file SCOPE.md] [--only h1,...]
+  bbflow hunt --list <file> --scope-file SCOPE.md [--name <slug>] [--probe] [--only h1,...]
+  bbflow flow <target> [--scope-file SCOPE.md]   recon + hunt + report 一條龍
+  bbflow flow --list <file> --scope-file SCOPE.md [--name <slug>] [--probe]
   bbflow dedupe <target>           對比已送報告找重複
   bbflow status [<target>]
   bbflow list
@@ -117,11 +119,16 @@ ${B}Usage:${N}
 ${B}Examples:${N}
   bbflow doctor
   bbflow init target.example.com
-  bbflow flow target.example.com
-  bbflow hunt target.example.com --only cors,graphql
-  bbflow hunt --list hosts.txt --name my-prog --probe    # IP/domain/URL list 直打
+  bbflow flow target.example.com --scope-file scope.yaml
+  bbflow hunt target.example.com --scope-file scope.yaml --only cors,graphql
+  bbflow hunt --list hosts.txt --scope-file scope.yaml --name my-prog --probe
   OSMEDEUS_VPS=user@1.2.3.4 bbflow recon target.example.com --osmedeus
   bbflow submit-checklist hitcon
+
+${B}Scope guard:${N}
+  recon/hunt/flow refuse to run without workshop/<target>/SCOPE.md.
+  External automation should pass --scope-file scope.yaml or scope.json (schema_version: 1).
+  Use --allow-no-scope only for explicitly authorized internal runs.
 
 ${B}Workspace:${N}
   預設 workshop/ 建在執行 bbflow 的目錄（\$PWD）
@@ -138,7 +145,7 @@ ${B}Directory layout:${N}
     nxdomain/nxdomain_corpus.txt   ← NXDOMAIN payload 候選
     HUNTERS_REPORT_YYYYMMDD_HHMM.md ← 彙總報告
 
-${B}28 Hunters (對應 confirmed bounty 案例 + 高 ROI pattern + WAF-friendly low-noise):${N}
+${B}${HUNTER_COUNT} hunter scripts${N} (對應 confirmed bounty 案例 + 高 ROI pattern + WAF-friendly low-noise；完整清單見 tools/hunters/README.md):
   hybris-occ       SAP Hybris OCC default creds + cart IDOR    [SAP Hybris OCC pattern]
   envdata          window.envData + AWS/Google/Sentry keys     [SPA inline window config pattern]
   sourcemap        .js.map → sourcesContent 密鑰 grep          [SPA inline config / multi-brand]
@@ -312,9 +319,9 @@ cmd_doctor() {
 
 # ── cmd: list ─────────────────────────────────────────────────
 cmd_list() {
-  if [ ! -d "$BASE_DIR/research" ]; then echo "(no research dir)"; return; fi
+  if [ ! -d "$BASE_DIR/workshop" ]; then echo "(no workshop dir)"; return; fi
   echo "${B}Targets in workshop/:${N}"
-  for T in "$BASE_DIR/research"/*/; do
+  for T in "$BASE_DIR/workshop"/*/; do
     [ -d "$T" ] || continue
     NAME=$(basename "$T")
     SCOPE="$T/SCOPE.md"; BBOT_SUBS="$T/bbot/subdomains.txt"; LIVE="$T/bbot/live_hosts.txt"
@@ -371,6 +378,382 @@ cmd_scope() {
   local SCOPE="$BASE_DIR/workshop/$T/SCOPE.md"
   [ -f "$SCOPE" ] || { err "no scope for $T (run: bbflow init $T)"; exit 1; }
   cat "$SCOPE"
+}
+
+scope_has_placeholders() {
+  local SCOPE="$1"
+  grep -Eq '<--|<HackerOne|<Bugcrowd|<Intigriti|<Immunefi|<target>|填完整|TODO' "$SCOPE" 2>/dev/null
+}
+
+write_legacy_scope_contract() {
+  local T="$1" DIR="$2"
+  python3 - "$T" "$DIR/scope_contract.json" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+target, contract_path = sys.argv[1:]
+payload = {
+    "format": "markdown",
+    "schema_version": None,
+    "source_file": "SCOPE.md",
+    "target": target,
+    "program": None,
+    "scan_level": None,
+    "rate_limit": None,
+    "in_scope": [],
+    "out_of_scope": [],
+    "allowed_tools": [],
+}
+Path(contract_path).write_text(
+    json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+    encoding="utf-8",
+)
+PY
+}
+
+import_scope_file() {
+  local T="$1" DIR="$2" SCOPE_FILE="$3"
+  local LOWER CANONICAL FORMAT
+  LOWER="$(echo "$SCOPE_FILE" | tr '[:upper:]' '[:lower:]')"
+
+  case "$LOWER" in
+    *.yaml|*.yml)
+      FORMAT="yaml"
+      CANONICAL="$DIR/scope.yaml"
+      ;;
+    *.json)
+      FORMAT="json"
+      CANONICAL="$DIR/scope.json"
+      ;;
+    *)
+      cp "$SCOPE_FILE" "$DIR/SCOPE.md"
+      write_legacy_scope_contract "$T" "$DIR"
+      ok "scope-file copied → $DIR/SCOPE.md"
+      return 0
+      ;;
+  esac
+
+  cp "$SCOPE_FILE" "$CANONICAL"
+  python3 - "$T" "$FORMAT" "$CANONICAL" "$DIR/SCOPE.md" "$DIR/scope_contract.json" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+
+def parse_scalar(value):
+    value = value.strip()
+    if not value:
+        return ""
+    if (value[0], value[-1]) in {("'", "'"), ('"', '"')}:
+        value = value[1:-1]
+    if value.isdigit():
+        return int(value)
+    return value
+
+
+def parse_simple_yaml(text):
+    data = {}
+    current_list = None
+    for raw in text.splitlines():
+        if not raw.strip() or raw.lstrip().startswith("#"):
+            continue
+        stripped = raw.strip()
+        if not raw.startswith((" ", "\t")) and ":" in stripped:
+            key, value = stripped.split(":", 1)
+            key = key.strip()
+            value = value.strip()
+            if value:
+                data[key] = parse_scalar(value)
+                current_list = None
+            else:
+                data[key] = []
+                current_list = key
+            continue
+        if current_list and stripped.startswith("- "):
+            data[current_list].append(parse_scalar(stripped[2:]))
+    return data
+
+
+def as_list(value):
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return [str(item) for item in value]
+    return [str(value)]
+
+
+def fail(message):
+    print(message, file=sys.stderr)
+    raise SystemExit(2)
+
+
+target, fmt, source, scope_md, contract_json = sys.argv[1:]
+source_path = Path(source)
+if fmt == "json":
+    data = json.loads(source_path.read_text(encoding="utf-8"))
+else:
+    data = parse_simple_yaml(source_path.read_text(encoding="utf-8"))
+
+required = ["schema_version", "target", "scan_level", "rate_limit", "in_scope", "out_of_scope"]
+for field in required:
+    if field not in data:
+        fail(f"scope.{fmt} missing required field: {field}")
+
+if int(data["schema_version"]) != 1:
+    fail(f"scope.{fmt} unsupported schema_version: {data['schema_version']}")
+
+in_scope = as_list(data.get("in_scope"))
+out_of_scope = as_list(data.get("out_of_scope"))
+allowed_tools = as_list(data.get("allowed_tools"))
+if not in_scope:
+    fail(f"scope.{fmt} missing required field: in_scope")
+
+contract = {
+    "format": fmt,
+    "schema_version": 1,
+    "source_file": source_path.name,
+    "target": str(data.get("target")),
+    "program": data.get("program"),
+    "scan_level": str(data.get("scan_level")),
+    "rate_limit": data.get("rate_limit"),
+    "in_scope": in_scope,
+    "out_of_scope": out_of_scope,
+    "allowed_tools": allowed_tools,
+}
+
+lines = [
+    f"# {target} Scope",
+    "",
+    f"Source: {source_path.name}",
+    "schema_version: 1",
+]
+if contract["program"]:
+    lines.append(f"program: {contract['program']}")
+lines.extend(
+    [
+        f"scope_target: {contract['target']}",
+        f"scan_level: {contract['scan_level']}",
+        f"rate_limit: {contract['rate_limit']}",
+        "",
+        "## In-Scope",
+    ]
+)
+lines.extend(f"- {item}" for item in in_scope)
+lines.extend(["", "## Out-of-Scope (OOS)"])
+if out_of_scope:
+    lines.extend(f"- {item}" for item in out_of_scope)
+else:
+    lines.append("- (none specified)")
+if allowed_tools:
+    lines.extend(["", "## Allowed Tools"])
+    lines.extend(f"- {item}" for item in allowed_tools)
+lines.append("")
+
+Path(scope_md).write_text("\n".join(lines), encoding="utf-8")
+Path(contract_json).write_text(
+    json.dumps(contract, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+    encoding="utf-8",
+)
+PY
+  ok "scope-file imported ($FORMAT v1) → $DIR/SCOPE.md"
+}
+
+ensure_scope() {
+  local T="$1" DIR="$2" SCOPE_FILE="$3" ALLOW_NO_SCOPE="$4" ACTION="$5"
+  mkdir -p "$DIR"
+
+  if [ -n "$SCOPE_FILE" ]; then
+    [ -f "$SCOPE_FILE" ] || { err "--scope-file not found: $SCOPE_FILE"; exit 1; }
+    import_scope_file "$T" "$DIR" "$SCOPE_FILE"
+  fi
+
+  if [ ! -f "$DIR/SCOPE.md" ]; then
+    if [ "$ALLOW_NO_SCOPE" = "1" ]; then
+      warn "no SCOPE.md — proceeding only because --allow-no-scope was set"
+      return 0
+    fi
+    err "no SCOPE.md — refusing to $ACTION without scope"
+    err "run: bbflow init $T  OR pass: --scope-file SCOPE.md"
+    err "authorized external automation may use --allow-no-scope explicitly"
+    exit 1
+  fi
+
+  if scope_has_placeholders "$DIR/SCOPE.md" && [ "$ALLOW_NO_SCOPE" != "1" ]; then
+    err "SCOPE.md still contains placeholders — fill it before $ACTION"
+    err "or pass a reviewed external scope with --scope-file SCOPE.md"
+    exit 1
+  fi
+
+  [ -f "$DIR/scope_contract.json" ] || write_legacy_scope_contract "$T" "$DIR"
+}
+
+write_candidates_jsonl() {
+  local T="$1" REPORT="$2" CANDIDATES="$3"
+  python3 - "$T" "$REPORT" "$CANDIDATES" <<'PY'
+import hashlib
+import json
+import re
+import sys
+from pathlib import Path
+
+target, report_path, candidates_path = sys.argv[1:]
+report = Path(report_path)
+candidates = Path(candidates_path)
+candidates.parent.mkdir(parents=True, exist_ok=True)
+
+def infer_vuln_class(hunter, text):
+    base = hunter.split()[0].strip().lower()
+    mapping = {
+        "cors": "cors",
+        "graphql": "graphql",
+        "userenum": "user-enumeration",
+        "git-exposure": "source-disclosure",
+        "git-deep": "source-disclosure",
+        "js-secrets": "secret-exposure",
+        "envdata": "secret-exposure",
+        "sourcemap": "source-map-disclosure",
+        "nuclei": "template-finding",
+        "nuclei-secrets": "secret-exposure",
+        "nuclei-panels": "exposed-panel",
+        "nuclei-wp": "known-vulnerability",
+        "param-fuzz": "dast",
+        "dalfox-xss": "xss",
+        "ffuf-dirs": "content-discovery",
+        "portscan": "exposed-service",
+    }
+    if "secret" in text.lower():
+        return "secret-exposure"
+    return mapping.get(base, "unknown")
+
+
+rows = []
+if report.exists():
+    hunter = "report"
+    for line in report.read_text(encoding="utf-8", errors="replace").splitlines():
+        text = line.strip()
+        if text.startswith("## "):
+            hunter = text[3:].strip()
+            continue
+        if text.startswith("- 🔴"):
+            clean = text[2:].strip()
+            url = re.search(r"https?://[^\\s)]+", clean)
+            url_value = url.group(0).rstrip(".,") if url else None
+            dedupe_basis = "|".join([target, hunter, url_value or "", clean]).lower()
+            dedupe_key = hashlib.sha256(dedupe_basis.encode("utf-8")).hexdigest()
+            severity_match = re.search(r"\[(critical|high|medium|low|info)\]", clean, re.I)
+            row = {
+                "schema_version": 1,
+                "candidate_id": f"bbflow-{dedupe_key[:16]}",
+                "target": target,
+                "hunter": hunter,
+                "vuln_class": infer_vuln_class(hunter, clean),
+                "confidence": "candidate",
+                "severity": severity_match.group(1).lower() if severity_match else "unknown",
+                "source": "hunters_report",
+                "text": clean,
+                "url": url_value,
+                "dedupe_key": dedupe_key,
+                "evidence_path": str(report),
+                "artifact_refs": [str(report)],
+                "triage_status": "candidate",
+            }
+            rows.append(row)
+
+with candidates.open("w", encoding="utf-8") as fh:
+    for row in rows:
+        fh.write(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n")
+PY
+}
+
+write_run_manifest() {
+  local T="$1" COMMAND="$2" DIR="$3" REPORT="$4" LIVE="$5" SCOPE="$6" ALLOW_NO_SCOPE="$7"
+  local CANDIDATES="$DIR/candidates.jsonl"
+  local MANIFEST="$DIR/run_manifest.json"
+  write_candidates_jsonl "$T" "$REPORT" "$CANDIDATES"
+  python3 - "$T" "$COMMAND" "$DIR" "$REPORT" "$LIVE" "$SCOPE" "$ALLOW_NO_SCOPE" "$CANDIDATES" "$MANIFEST" <<'PY'
+import json
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+
+target, command, target_dir, report, live, scope, allow_no_scope, candidates, manifest = sys.argv[1:]
+live_path = Path(live)
+live_hosts_count = 0
+if live_path.exists():
+    live_hosts_count = sum(1 for line in live_path.read_text(encoding="utf-8", errors="replace").splitlines() if line.strip())
+
+candidate_path = Path(candidates)
+candidate_count = 0
+if candidate_path.exists():
+    candidate_count = sum(1 for line in candidate_path.read_text(encoding="utf-8", errors="replace").splitlines() if line.strip())
+
+contract_path = Path(target_dir) / "scope_contract.json"
+if contract_path.exists():
+    scope_contract = json.loads(contract_path.read_text(encoding="utf-8"))
+elif scope:
+    scope_contract = {
+        "format": "markdown",
+        "schema_version": None,
+        "source_file": Path(scope).name,
+        "target": target,
+        "program": None,
+        "scan_level": None,
+        "rate_limit": None,
+        "in_scope": [],
+        "out_of_scope": [],
+        "allowed_tools": [],
+    }
+else:
+    scope_contract = {
+        "format": "none",
+        "schema_version": None,
+        "source_file": None,
+        "target": target,
+        "program": None,
+        "scan_level": None,
+        "rate_limit": None,
+        "in_scope": [],
+        "out_of_scope": [],
+        "allowed_tools": [],
+    }
+
+payload = {
+    "schema_version": 1,
+    "candidate_schema_version": 1,
+    "candidate_schema_fields": [
+        "schema_version",
+        "candidate_id",
+        "target",
+        "hunter",
+        "vuln_class",
+        "confidence",
+        "severity",
+        "source",
+        "text",
+        "url",
+        "dedupe_key",
+        "evidence_path",
+        "artifact_refs",
+        "triage_status",
+    ],
+    "target": target,
+    "command": command,
+    "created_at": datetime.now(timezone.utc).isoformat(),
+    "target_dir": target_dir,
+    "scope_file": scope,
+    "scope_contract": scope_contract,
+    "allow_no_scope": allow_no_scope == "1",
+    "live_hosts_count": live_hosts_count,
+    "candidate_count": candidate_count,
+    "artifacts": {
+        "hunters_report": report,
+        "candidates_jsonl": candidates,
+    },
+}
+
+Path(manifest).write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+PY
 }
 
 # ── cmd: submit-checklist ──────────────────────────────────────
@@ -439,17 +822,18 @@ EOF
 # ── cmd: recon ────────────────────────────────────────────────
 cmd_recon() {
   local T="$1"; shift
-  local OSMEDEUS=0
+  local OSMEDEUS=0 SCOPE_FILE="" ALLOW_NO_SCOPE=0
   while [ $# -gt 0 ]; do
     case "$1" in
       --osmedeus) OSMEDEUS=1; shift;;
+      --scope-file|--scope) SCOPE_FILE="$2"; shift 2;;
+      --allow-no-scope) ALLOW_NO_SCOPE=1; shift;;
       *) shift;;
     esac
   done
 
   local DIR="$BASE_DIR/workshop/$T"
-  [ ! -d "$DIR" ] && { err "no dir for $T (run: bbflow init $T)"; exit 1; }
-  [ ! -f "$DIR/SCOPE.md" ] && { err "no SCOPE.md — refusing to recon without scope"; exit 1; }
+  ensure_scope "$T" "$DIR" "$SCOPE_FILE" "$ALLOW_NO_SCOPE" "recon"
 
   mkdir -p "$DIR/bbot"
   local LIVE="$DIR/bbot/live_hosts.txt"
@@ -458,10 +842,21 @@ cmd_recon() {
   if [ "$OSMEDEUS" = "1" ]; then
     local VPS="${OSMEDEUS_VPS:-}"
     [ -z "$VPS" ] && { err "OSMEDEUS_VPS not set"; exit 1; }
-    info "Osmedeus scan on $VPS..."
-    ssh "$VPS" "osmedeus scan -f general -t $T" 2>&1 | tail -5
-    scp -q "$VPS:~/.osmedeus/workspaces/$T/module/subdomain-enumeration/final-subdomain.txt" "$SUBS" 2>/dev/null || true
-    scp -q "$VPS:~/.osmedeus/workspaces/$T/module/http-probing/http-probing.txt" "$LIVE.raw" 2>/dev/null || true
+    local QT
+    QT="$(printf '%q' "$T")"
+    local REMOTE_ROOT="${BBFLOW_REMOTE_ROOT:-~/bbflow}"
+    case "$REMOTE_ROOT" in
+      *[!A-Za-z0-9_./~+-]*)
+        err "unsafe BBFLOW_REMOTE_ROOT: $REMOTE_ROOT"
+        exit 1
+        ;;
+    esac
+    info "Osmedeus bbflow-safe scan on $VPS ($REMOTE_ROOT)..."
+    ssh "$VPS" "cd $REMOTE_ROOT && if [ -x tools/vps/bbflow-vps.sh ]; then tools/vps/bbflow-vps.sh standard $QT; else osmedeus run -f bbflow-safe -t $QT --timeout 2h; fi" 2>&1 | tail -5
+    scp -q "$VPS:~/workspaces-osmedeus/$T/subdomain/subdomain-$T.txt" "$SUBS" 2>/dev/null || \
+      scp -q "$VPS:~/.osmedeus/workspaces/$T/module/subdomain-enumeration/final-subdomain.txt" "$SUBS" 2>/dev/null || true
+    scp -q "$VPS:~/workspaces-osmedeus/$T/probing/http-$T.txt" "$LIVE.raw" 2>/dev/null || \
+      scp -q "$VPS:~/.osmedeus/workspaces/$T/module/http-probing/http-probing.txt" "$LIVE.raw" 2>/dev/null || true
     [ -f "$LIVE.raw" ] && grep -oE 'https?://[^ ]+' "$LIVE.raw" | sort -u > "$LIVE"
   elif [ -x "$BBOT" ]; then
     info "BBOT passive recon (~10 min)..."
@@ -520,24 +915,33 @@ cmd_hunt() {
     T="$1"; shift
   fi
 
-  local ONLY="" LIST_FILE="" PROBE=0
+  local ONLY="" LIST_FILE="" SCOPE_FILE="" ALLOW_NO_SCOPE=0 PROBE=0
   while [ $# -gt 0 ]; do
     case "$1" in
       --only)      ONLY="$2";      shift 2;;
       --list|-l)   LIST_FILE="$2"; shift 2;;
       --name|-n)   T="$2";         shift 2;;
+      --scope-file|--scope) SCOPE_FILE="$2"; shift 2;;
+      --allow-no-scope) ALLOW_NO_SCOPE=1; shift;;
       --probe)     PROBE=1;        shift;;
       *)           shift;;
     esac
   done
+
+  if [ -n "$LIST_FILE" ] && [ -z "$T" ]; then
+    T="list_$(basename "$LIST_FILE" .txt | tr ' /' '__')"
+  fi
+  [ -z "$T" ] && { err "usage: bbflow hunt <target> [--scope-file SCOPE.md] [--only h1,...]  OR  bbflow hunt --list <file> --scope-file SCOPE.md [--name <slug>] [--probe]"; exit 1; }
+
+  local DIR="$BASE_DIR/workshop/$T"
+  local LIVE="$DIR/bbot/live_hosts.txt"
+  ensure_scope "$T" "$DIR" "$SCOPE_FILE" "$ALLOW_NO_SCOPE" "hunt"
 
   # ── --list mode: normalize input → live_hosts.txt ─────────────
   if [ -n "$LIST_FILE" ]; then
     [ ! -f "$LIST_FILE" ] && { err "--list: file not found: $LIST_FILE"; exit 1; }
     local ABS_LIST
     ABS_LIST="$(cd "$(dirname "$LIST_FILE")" && pwd)/$(basename "$LIST_FILE")"
-    # derive target slug from filename if --name not given
-    [ -z "$T" ] && T="list_$(basename "$ABS_LIST" .txt | tr ' /' '__')"
 
     mkdir -p "$BASE_DIR/workshop/$T/bbot" "$BASE_DIR/workshop/$T/hunters"
 
@@ -584,11 +988,6 @@ NORM
       fi
     fi
   fi
-
-  [ -z "$T" ] && { err "usage: bbflow hunt <target> [--only h1,...]  OR  bbflow hunt --list <file> [--name <slug>] [--probe]"; exit 1; }
-
-  local DIR="$BASE_DIR/workshop/$T"
-  local LIVE="$DIR/bbot/live_hosts.txt"
 
   # Auto-seed live_hosts.txt from target name when no recon / --list was run
   if [ ! -s "$LIVE" ] && [ -z "$LIST_FILE" ]; then
@@ -670,6 +1069,8 @@ EOF
   run_hunter monitor-bypass "$TOOLS_DIR/hunters/hunt-monitor-bypass.sh"      host
   run_hunter sms-static-cred "$TOOLS_DIR/hunters/hunt-sms-static-cred.sh"   host
   run_hunter git-deep      "$TOOLS_DIR/hunters/hunt-git-deep.sh"             host
+  run_hunter swagger       "$TOOLS_DIR/hunters/hunt-swagger.sh"              host
+  run_hunter shodan-ip     "$TOOLS_DIR/hunters/hunt-shodan-ip.sh"            host
   # subdomain-takeover: feed individual hostnames (dig CNAME), skip live_hosts loop
   if want takeover; then
     info "hunter: takeover (per-subdomain)"
@@ -698,6 +1099,86 @@ EOF
     [ -s "$NX" ] && echo "" >> "$REPORT" && \
       echo "## nxdomain corpus" >> "$REPORT" && \
       echo "- $(wc -l < $NX | tr -d ' ') NXDOMAIN candidates → $NX" >> "$REPORT"
+  fi
+
+  # ── domain-level hunters（ROOT_DOMAIN 推斷，不走 live_hosts 迴圈）─────────────
+  # ROOT_DOMAIN: 從 live_hosts.txt 第一行 URL 取出 eTLD+1
+  local ROOT_DOMAIN
+  ROOT_DOMAIN=$(head -1 "$LIVE" | sed -E 's|^https?://||' | cut -d/ -f1 | cut -d: -f1 | \
+    sed 's/^www\.//' | rev | cut -d. -f1-2 | rev)
+
+  if want subdomain-prefix; then
+    info "hunter: subdomain-prefix (active prefix sweep for $ROOT_DOMAIN)"
+    local OH="$DIR/hunters/subdomain-prefix"
+    mkdir -p "$OH"
+    export OUT_DIR="$OH"
+    KNOWN_SUBS_FILE=""
+    [ -f "$DIR/bbot/subdomains.txt" ] && KNOWN_SUBS_FILE="$DIR/bbot/subdomains.txt"
+    "$TOOLS_DIR/hunters/hunt-subdomain-prefix.sh" "$ROOT_DOMAIN" "$KNOWN_SUBS_FILE" 2>/dev/null || true
+    local HITS
+    HITS=$(grep -h "^🔴" "$OH"/*.txt 2>/dev/null | sort -u || true)
+    echo "" >> "$REPORT"; echo "## subdomain-prefix" >> "$REPORT"
+    [ -n "$HITS" ] && echo "$HITS" | while read L; do echo "- $L" >> "$REPORT"; done || \
+      echo "- (no new subdomains found)" >> "$REPORT"
+    unset OUT_DIR
+  fi
+
+  if want hudson-rock; then
+    info "hunter: hudson-rock (breach corpus for $ROOT_DOMAIN)"
+    local OH="$DIR/hunters/hudson-rock"
+    mkdir -p "$OH"
+    export OUT_DIR="$OH"
+    "$TOOLS_DIR/hunters/hunt-hudson-rock.sh" "$ROOT_DOMAIN" 2>/dev/null || true
+    local HITS
+    HITS=$(grep -h "^🔴\|^🟠" "$OH"/*.txt 2>/dev/null | sort -u || true)
+    echo "" >> "$REPORT"; echo "## hudson-rock" >> "$REPORT"
+    [ -n "$HITS" ] && echo "$HITS" | while read L; do echo "- $L" >> "$REPORT"; done || \
+      echo "- (no breach records found)" >> "$REPORT"
+    unset OUT_DIR
+  fi
+
+  if want email-security; then
+    info "hunter: email-security (SPF/DMARC/DKIM audit for $ROOT_DOMAIN)"
+    local OH="$DIR/hunters/email-security"
+    mkdir -p "$OH"
+    export OUT_DIR="$OH"
+    "$TOOLS_DIR/hunters/hunt-email-security.sh" "$ROOT_DOMAIN" 2>/dev/null || true
+    local HITS
+    HITS=$(grep -h "^🔴\|^🟠\|^🟡" "$OH"/*.txt 2>/dev/null | sort -u || true)
+    echo "" >> "$REPORT"; echo "## email-security" >> "$REPORT"
+    [ -n "$HITS" ] && echo "$HITS" | while read L; do echo "- $L" >> "$REPORT"; done || \
+      echo "- (no email security issues found)" >> "$REPORT"
+    unset OUT_DIR
+  fi
+
+  if want cloud-bucket; then
+    info "hunter: cloud-bucket (S3/GCS/Azure for $ROOT_DOMAIN)"
+    local OH="$DIR/hunters/cloud-bucket"
+    mkdir -p "$OH"
+    export OUT_DIR="$OH"
+    "$TOOLS_DIR/hunters/hunt-cloud-bucket.sh" "$ROOT_DOMAIN" 2>/dev/null || true
+    local HITS
+    HITS=$(grep -h "^🔴\|^🟠" "$OH"/*.txt 2>/dev/null | sort -u || true)
+    echo "" >> "$REPORT"; echo "## cloud-bucket" >> "$REPORT"
+    [ -n "$HITS" ] && echo "$HITS" | while read L; do echo "- $L" >> "$REPORT"; done || \
+      echo "- (no exposed buckets found)" >> "$REPORT"
+    unset OUT_DIR
+  fi
+
+  if want wayback; then
+    info "hunter: wayback-endpoints (CDX historical paths for $ROOT_DOMAIN)"
+    local OH="$DIR/hunters/wayback"
+    mkdir -p "$OH"
+    export OUT_DIR="$OH"
+    KNOWN_PATHS_FILE=""
+    [ -f "$DIR/RECON_DB.md" ] && KNOWN_PATHS_FILE="$DIR/RECON_DB.md"
+    "$TOOLS_DIR/hunters/hunt-wayback-endpoints.sh" "$ROOT_DOMAIN" 2>/dev/null || true
+    local HITS
+    HITS=$(grep -h "^🔴\|^🟡" "$OH"/*.txt 2>/dev/null | sort -u || true)
+    echo "" >> "$REPORT"; echo "## wayback-endpoints" >> "$REPORT"
+    [ -n "$HITS" ] && echo "$HITS" | while read L; do echo "- $L" >> "$REPORT"; done || \
+      echo "- (no high-value historical paths found)" >> "$REPORT"
+    unset OUT_DIR
   fi
 
   # ── nuclei bb-recon templates ─────────────────────────────
@@ -1039,7 +1520,12 @@ EOF
     fi
   fi
 
+  local SCOPE_PATH=""
+  [ -f "$DIR/SCOPE.md" ] && SCOPE_PATH="$DIR/SCOPE.md"
+  write_run_manifest "$T" "hunt" "$DIR" "$REPORT" "$LIVE" "$SCOPE_PATH" "$ALLOW_NO_SCOPE"
   ok "report → $REPORT"
+  ok "manifest → $DIR/run_manifest.json"
+  ok "candidates → $DIR/candidates.jsonl"
   echo ""
   grep "^- 🔴" "$REPORT" 2>/dev/null | head -20 || true
 }
@@ -1090,8 +1576,8 @@ cmd_flow() {
   fi
   local T="$1"
   cmd_init "$T"
-  cmd_recon "$T"
-  cmd_hunt "$T"
+  cmd_recon "$@"
+  cmd_hunt "$@"
 }
 
 # ── cmd: status ──────────────────────────────────────────────

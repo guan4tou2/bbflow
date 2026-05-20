@@ -74,6 +74,12 @@ if [ -z "$FOUND_PATHS" ]; then
   exit 0
 fi
 
+# ── Bonus: check /json/version.json on .git hosts (EVERY8D TP-S18 pattern) ─
+VERSION_JSON=$(curl -sk --max-time 8 "$HOST/json/version.json" 2>/dev/null)
+if echo "$VERSION_JSON" | python3 -c "import json,sys; d=json.load(sys.stdin); print(len(d))" 2>/dev/null | grep -qE "^[1-9]"; then
+  hit "version.json exposed on .git host: $HOST/json/version.json → $(echo "$VERSION_JSON" | head -c 200)"
+fi
+
 # ── Step 3: for each found path, grab config → remote URL → supply chain ─
 for P in $FOUND_PATHS; do
   CONFIG=$(curl -sk --max-time 8 "${HOST}${P}.git/config")
@@ -83,6 +89,20 @@ for P in $FOUND_PATHS; do
     if echo "$REMOTE" | grep -qE "github\.com|gitlab\.com|bitbucket\.org"; then
       ORG=$(echo "$REMOTE" | sed -E 's|.*[:/]([^/]+)/[^/]+\.git.*|\1|' | sed -E 's|.*[:/]([^/]+)/[^/]+$|\1|')
       hit "supply chain org: $ORG (search github.com/$ORG for other clients)"
+    fi
+  fi
+done
+
+# ── Step 3b: weak date-based token endpoint (EVERY8D js.e8d.tw pattern) ──
+# CDN servers with .git exposure sometimes also expose /getip?token=<base64(MM/DD/YYYY)>
+for P in $FOUND_PATHS; do
+  TODAY_TOKEN=$(python3 -c "import base64,datetime; d=datetime.date.today(); print(base64.b64encode(d.strftime('%m/%d/%Y').encode()).decode())" 2>/dev/null || true)
+  if [ -n "$TODAY_TOKEN" ]; then
+    GETIP_URL="${HOST}${P}getip?token=${TODAY_TOKEN}"
+    GETIP_BODY=$(curl -sk --max-time 6 "$GETIP_URL" 2>/dev/null)
+    if echo "$GETIP_BODY" | grep -qiE "function getip|getip\(\)|ipaddr|\"ip\""; then
+      hit "weak date-based token: $GETIP_URL → response reveals internal functionality"
+      log "  evidence: $(echo "$GETIP_BODY" | head -c 200)"
     fi
   fi
 done

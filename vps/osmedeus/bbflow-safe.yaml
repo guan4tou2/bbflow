@@ -1,0 +1,71 @@
+# =============================================================================
+# Flow Workflow: bbflow-safe
+# =============================================================================
+# Bug-bounty-program-safe recon flow. Does NOT run:
+#   - nuclei vulnerability scan (brute-force-like, many programs forbid)
+#   - content/directory fuzzing (ffuf)
+#   - DNS brute-force
+# Does run:
+#   - Passive subdomain enum (subfinder + findomain + assetfinder)
+#   - DNS + HTTP probing
+#   - HTTP fingerprinting
+#   - Wayback/Archive URL mining
+#   - Screenshot gallery
+#   - IP-space mapping (CDN filtering)
+#   - Port fingerprint (top HTTP ports only, not full-range scan)
+# =============================================================================
+
+kind: flow
+name: bbflow-safe
+description: Scope-compliant recon — passive enum + probe + fingerprint + archive + screenshots, NO brute-force, NO nuclei
+tags: recon, bbflow, safe, passive, domain
+help:
+  example_targets: ['clearme.com', 'uphold.com']
+  usage: osmedeus run -f bbflow-safe -t example.com
+  note: |
+    Respects program rules that forbid brute-force testing or unbounded scanners.
+    For authorised scanning add --params 'nuclei=true' and use 'domain-standard' instead.
+
+params:
+  - name: enableDnsBruteFocing
+    default: "false"
+
+dependencies:
+  variables:
+    - name: Target
+      type: domain
+      required: true
+
+modules:
+  - name: enum-subdomain
+    path: common/enum-subdomain.yaml
+
+  - name: probe-dns
+    path: common/probe-dns.yaml
+    depends_on:
+      - enum-subdomain
+
+  - name: recon-http-fp
+    path: common/recon-http-fp.yaml
+    depends_on:
+      - probe-dns
+
+  - name: recon-screenshot
+    path: common/recon-screenshot.yaml
+    depends_on:
+      - recon-http-fp
+
+  - name: util-archive
+    path: common/util-archive.yaml
+    depends_on:
+      - recon-http-fp
+
+  - name: enum-ipspace
+    path: common/enum-ipspace.yaml
+    depends_on:
+      - recon-http-fp
+
+  - name: probe-port-fp
+    path: common/probe-port-fp.yaml
+    depends_on:
+      - recon-http-fp

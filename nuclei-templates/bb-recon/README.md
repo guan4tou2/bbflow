@@ -32,7 +32,7 @@
 ## 使用方式
 
 ```bash
-TOOLS=/Users/guantou/Desktop/BugBounty/tools
+TOOLS=/path/to/bbflow/tools
 TEMPLATES=$TOOLS/nuclei-templates/bb-recon
 
 # 單一目標（手動確認用）
@@ -77,3 +77,15 @@ bbflow hunt <target> --only nuclei-secrets
 - nuclei 結果本身不能直接作為 PoC — 需要補充截圖/curl 驗證步驟
 - rate-limit 保持低數值，避免觸發 WAF 或違反 scope
 - SSRF OOB template 需要 nuclei 配置 interactsh，或手動替換 `{{interactsh-url}}` 為自己的 callback server
+
+## Nuclei template lifecycle
+
+新增 / 修改 template 後，必須完成下列流程才 promote 到預設 bb-recon 集合：
+
+1. draft：從 Vault Finding / Pattern / Lessons 回寫成通用 template，移除 target-specific host、token、cookie、raw log。
+2. syntax：跑 `nuclei -validate -t tools/nuclei-templates/bb-recon`。
+3. null case：跑 `example.com null-case` 或等價無害 host，確認沒有 obvious false-positive。
+4. scoped live canary：只在明確授權 target，以單 template、低 `rate-limit` 試跑。
+5. false-positive review：命中先進 Attempt / candidate，不直接升級 Finding。
+6. promote：穩定後才納入預設集合，並同步 README / wiki / CHANGELOG。
+7. 回寫：把命中條件、失敗條件與 false-positive 規則回寫 Vault Pattern / Lessons。

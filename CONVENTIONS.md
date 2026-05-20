@@ -5,7 +5,7 @@
 核心原則：
 
 > **Hunter 是類型工具，不是案例記事本。**
-> target-specific 內容屬於你的個人 memory / research 目錄，**不進這個 repo**。
+> target-specific 內容屬於你的個人 workspace / memory，**不進這個 repo**。
 
 ---
 
@@ -138,7 +138,7 @@ Target 品牌名稱**單獨**出現在公開 writeup 引用時可保留，但**�
 你的 target→hunter 對應表屬於 **個人 memory**，不是 bbflow repo：
 
 - 真實案例紀錄 → `~/.claude/projects/.../memory/`
-- Target 研究筆記 → `research/<target>/`（主 repo，也不進 tools/）
+- Target 研究筆記 → `workshop/<target>/` 或個人 workspace（不進 tools/）
 - bbflow 對照表 → **只寫 pattern 類別，不寫具體 target**
 
 ### Commit 前 grep 檢查
@@ -157,7 +157,7 @@ grep -rnE "AIza[A-Za-z0-9_-]{35}|eyJ[A-Za-z0-9_-]{20,}\.eyJ|sk_live_|ghp_[A-Za-z
 
 ## 歷史資訊搬家清單
 
-以下 target 的資訊應該留在 **個人 memory 或 research/**（不在 tools repo）：
+以下 target 的資訊應該留在 **個人 memory 或 workspace**（不在 tools repo）：
 
 - 特定 staging hostname
 - PoC 產出的具體 GUID / ID / 截圖檔名

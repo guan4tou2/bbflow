@@ -333,5 +333,5 @@ if [ "$CHECK_ONLY" = "1" ]; then
 else
   info "run: bbflow doctor         (verify all paths)"
   info "run: bbflow test           (smoke test hunters against example.com)"
-  info "tip: export BBFLOW_WORKSPACE=~/work  (set research/ output dir)"
+  info "tip: export BBFLOW_WORKSPACE=~/work  (set workshop/ output dir)"
 fi

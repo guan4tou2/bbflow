@@ -2,7 +2,7 @@
 
 ## 零、一鍵自動化入口（優先嘗試）
 
-bbflow 是統一 CLI，包裝 BBOT recon + 28 個 pattern hunter，最後產出 `research/<target>/HUNTERS_REPORT_*.md`。
+bbflow 是統一 CLI，包裝 BBOT / Osmedeus recon + 47 個 hunter scripts，最後產出 `workshop/<target>/HUNTERS_REPORT_*.md`。Runtime 獨立運作，**MUST NOT require Vault**、**MUST NOT require LLM**；Vault adapter 只在 run 完成後讀 `run_manifest.json` / `candidates.jsonl`。
 
 ### 安裝
 
@@ -32,9 +32,9 @@ bbflow doctor                         # 檢查依賴與 hunter 路徑
 bbflow flow target.com
 
 # 分階段
-bbflow init target.com                # 建 research/<target>/SCOPE.md 模板（必須先填）
+bbflow init target.com                # 建 workshop/<target>/SCOPE.md 模板（必須先填）
 bbflow recon target.com               # BBOT passive recon
-bbflow hunt target.com                # 對 live_hosts.txt 跑全 28 hunters
+bbflow hunt target.com                # 對 live_hosts.txt 跑 hunter scripts
 
 # IP / domain / URL 清單輸入（跳過 recon）
 bbflow hunt --list hosts.txt
@@ -243,7 +243,7 @@ docker run --rm -v $(pwd):/fw debian:bookworm-slim sh -c \
    cd /fw && binwalk -Me firmware.bin"
 ```
 
-### 4.2 韌體靜態分析 SOP（CLAUDE.md 驗證等級）
+### 4.2 韌體靜態分析 SOP（驗證等級）
 
 ```bash
 # Level A: 直接證據
