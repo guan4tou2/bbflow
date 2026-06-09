@@ -1,0 +1,47 @@
+id: bb-npmrc-authtoken
+
+info:
+  name: Exposed .npmrc / .yarnrc with registry auth
+  author: guan4tou2
+  severity: high
+  description: |
+    Probes for an exposed .npmrc/.yarnrc at web root. A real file leaks the package
+    registry config and may contain an _authToken (npm registry credential) — also
+    confirms public-vs-private npm resolution for dependency-confusion triage.
+    Catch-all aware: excludes the SPA app-shell so a 200 HTML fallback is not flagged.
+  tags: bb-recon,npmrc,disclosure,supply-chain
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/.npmrc"
+      - "{{BaseURL}}/.yarnrc"
+      - "{{BaseURL}}/.yarnrc.yml"
+    stop-at-first-match: false
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+      - type: word
+        condition: or
+        part: body
+        words:
+          - "_authToken"
+          - "_auth="
+          - "//registry."
+          - "registry="
+          - "always-auth"
+      - type: word
+        condition: or
+        negative: true
+        part: body
+        words:
+          - "<!doctype html"
+          - "<html"
+    extractors:
+      - type: regex
+        name: registry_or_token
+        part: body
+        regex:
+          - '(?i)(_authToken\s*=\s*\S+|//[^/\s]+/:_auth\S*|registry\s*=\s*https?://\S+)'

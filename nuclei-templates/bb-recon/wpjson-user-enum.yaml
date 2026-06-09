@@ -1,0 +1,42 @@
+id: bb-wpjson-user-enum
+
+info:
+  name: WordPress wp-json author/user enumeration
+  author: guan4tou2
+  severity: low
+  description: |
+    The WP REST users endpoint returning a real JSON array confirms author/user
+    enumeration (slug, id, name). Distinct from the default /wp-json discovery —
+    requires the actual users array. Catch-all aware.
+  tags: bb-recon,wordpress,enumeration,disclosure
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/wp-json/wp/v2/users"
+      - "{{BaseURL}}/?rest_route=/wp/v2/users"
+    stop-at-first-match: true
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+      - type: word
+        condition: and
+        part: body
+        words:
+          - '"slug":'
+          - '"id":'
+      - type: word
+        condition: or
+        negative: true
+        part: body
+        words:
+          - "<!doctype html"
+          - "<html"
+    extractors:
+      - type: regex
+        name: user_slugs
+        part: body
+        regex:
+          - '"slug":"([^"]+)"'
