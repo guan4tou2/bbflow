@@ -16,16 +16,18 @@
 FROM golang:1.23-bookworm AS go-builder
 
 # Install all Go-based tools in one layer for cache efficiency
+# 版本釘死 → tools.lock（避免 @latest rebuild 抓到 breaking change，如 katana 移除 -du）
+# 改版本流程: 改 tools.lock + 此處同步 → bbflow test 回歸 → commit
 RUN go install \
-    github.com/projectdiscovery/httpx/cmd/httpx@latest \
-    github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest \
-    github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest \
-    github.com/projectdiscovery/katana/cmd/katana@latest \
-    github.com/projectdiscovery/dnsx/cmd/dnsx@latest \
-    github.com/lc/gau/v2/cmd/gau@latest \
-    github.com/tomnomnom/waybackurls@latest \
+    github.com/projectdiscovery/httpx/cmd/httpx@v1.9.0 \
+    github.com/projectdiscovery/subfinder/v2/cmd/subfinder@v2.14.0 \
+    github.com/projectdiscovery/nuclei/v3/cmd/nuclei@v3.8.0 \
+    github.com/projectdiscovery/katana/cmd/katana@v1.6.1 \
+    github.com/projectdiscovery/dnsx/cmd/dnsx@v1.2.3 \
+    github.com/lc/gau/v2/cmd/gau@v2.2.4 \
+    github.com/tomnomnom/waybackurls@v0.1.0 \
     github.com/tomnomnom/gf@latest \
-    github.com/ffuf/ffuf/v2@latest \
+    github.com/ffuf/ffuf/v2@v2.1.0 \
     github.com/hahwul/dalfox/v2@latest \
     2>&1
 

@@ -315,6 +315,13 @@ cmd_doctor() {
   [ -n "${FFUF_HEADER:-}" ]       && ok "FFUF_HEADER set"                       || warn "FFUF_HEADER       — extra header for ffuf (e.g. Authorization: Bearer xxx)"
   [ -n "${ARJUN_HEADERS:-}" ]     && ok "ARJUN_HEADERS set"                     || warn "ARJUN_HEADERS     — authenticated param discovery"
   [ -n "${ARJUN_COOKIES:-}" ]     && ok "ARJUN_COOKIES set"                     || warn "ARJUN_COOKIES     — cookie for arjun"
+  echo ""
+  echo "${B}Pinned tool versions (tools.lock):${N}"
+  if [ -f "$TOOLS_DIR/scripts/check_tool_versions.sh" ]; then
+    bash "$TOOLS_DIR/scripts/check_tool_versions.sh" || warn "工具版本與 tools.lock 不一致 — 對齊: scripts/setup_pinned_tools.sh"
+  else
+    warn "scripts/check_tool_versions.sh missing (版本漂移無法偵測)"
+  fi
 }
 
 # ── cmd: list ─────────────────────────────────────────────────

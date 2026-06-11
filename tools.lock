@@ -1,0 +1,17 @@
+# bbflow tools.lock — 釘死外部工具版本（drift protection）
+# 背景: katana v1.1.0 移除 -du、nuclei 版本三邊不一致 → 漂移導致 hunter 爛 / 結果不可重現。
+# 規則: 向上對齊不降版；更新走「改此檔 → scripts/setup_pinned_tools.sh → bbflow test 回歸 → commit」。
+# 驗證: scripts/check_tool_versions.sh（doctor 會呼叫，漂移 warn 但不擋）。
+# 格式: <bin>  <version>  <go-module-path>
+#   version = latest      → 無 release tag 的 frozen 工具，不強制比對
+#   version = vN.x        → major-locked（避開 breaking 大版本），不強制比對小版本
+httpx        v1.9.0   github.com/projectdiscovery/httpx/cmd/httpx
+subfinder    v2.14.0  github.com/projectdiscovery/subfinder/v2/cmd/subfinder
+nuclei       v3.8.0   github.com/projectdiscovery/nuclei/v3/cmd/nuclei
+katana       v1.6.1   github.com/projectdiscovery/katana/cmd/katana
+dnsx         v1.2.3   github.com/projectdiscovery/dnsx/cmd/dnsx
+gau          v2.2.4   github.com/lc/gau/v2/cmd/gau
+waybackurls  v0.1.0   github.com/tomnomnom/waybackurls
+ffuf         v2.1.0   github.com/ffuf/ffuf/v2
+dalfox       v2.x     github.com/hahwul/dalfox/v2
+gf           latest   github.com/tomnomnom/gf
