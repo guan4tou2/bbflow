@@ -5,13 +5,14 @@
 # 格式: <bin>  <version>  <go-module-path>
 #   version = latest      → 無 release tag 的 frozen 工具，不強制比對
 #   version = vN.x        → major-locked（避開 breaking 大版本），不強制比對小版本
+#   第4欄 noverify         → 仍依版本 go install，但工具無可靠 -version（跳過 check 驗證）
 httpx        v1.9.0   github.com/projectdiscovery/httpx/cmd/httpx
 subfinder    v2.14.0  github.com/projectdiscovery/subfinder/v2/cmd/subfinder
 nuclei       v3.8.0   github.com/projectdiscovery/nuclei/v3/cmd/nuclei
 katana       v1.6.1   github.com/projectdiscovery/katana/cmd/katana
-dnsx         v1.2.3   github.com/projectdiscovery/dnsx/cmd/dnsx
-gau          v2.2.4   github.com/lc/gau/v2/cmd/gau
-waybackurls  v0.1.0   github.com/tomnomnom/waybackurls
+dnsx         v1.2.3   github.com/projectdiscovery/dnsx/cmd/dnsx        noverify
+gau          v2.2.4   github.com/lc/gau/v2/cmd/gau                     noverify
+waybackurls  v0.1.0   github.com/tomnomnom/waybackurls                 noverify
 ffuf         v2.1.0   github.com/ffuf/ffuf/v2
 dalfox       v2.x     github.com/hahwul/dalfox/v2
 gf           latest   github.com/tomnomnom/gf

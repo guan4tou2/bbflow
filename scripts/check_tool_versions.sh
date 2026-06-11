@@ -18,6 +18,10 @@ while read -r bin want mod _rest; do
     latest|v[0-9]*.x)
       printf "  [flex]    %-12s %s (彈性，不強制比對)\n" "$bin" "$want"; ok=$((ok+1)); continue ;;
   esac
+  case "$_rest" in
+    *noverify*)
+      printf "  [pin~]    %-12s %s (已釘版，工具無 -version 跳過驗證)\n" "$bin" "$want"; ok=$((ok+1)); continue ;;
+  esac
   got="$("$path" -version 2>&1 | grep -ioE 'v[0-9]+\.[0-9]+\.[0-9]+' | head -1)"
   if [ -z "$got" ]; then
     printf "  [MISSING] %-12s 無法取得版本 (want=%s, path=%s)\n" "$bin" "$want" "$path"; missing=$((missing+1))
