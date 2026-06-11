@@ -52,7 +52,6 @@ if [ -n "$KATANA" ]; then
     -kf all \
     -aff \
     -ct 8m \
-    -du 10 \
     -silent \
     -o "$OUT_DIR/katana.txt" 2>/dev/null || true
   [ -s "$OUT_DIR/katana.txt" ] && cat "$OUT_DIR/katana.txt" >> "$ALL_URLS"

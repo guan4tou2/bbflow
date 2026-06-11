@@ -66,7 +66,7 @@ if [ -n "$SIBLING_PARAMS" ] && [ -s "$SIBLING_PARAMS" ]; then
 else
   if [ -n "$KATANA" ]; then
     "$KATANA" -u "$TARGET" -d 3 -jc -js-crawl -kf all \
-      -ct 5m -du 10 -silent \
+      -ct 5m -silent \
       -o "$OUT_DIR/katana.txt" 2>/dev/null || true
     [ -s "$OUT_DIR/katana.txt" ] && cat "$OUT_DIR/katana.txt" >> "$ALL_URLS"
   fi
