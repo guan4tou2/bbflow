@@ -30,7 +30,7 @@ bbflow 依賴 ~13 個外部 CLI（recon/掃描）。本檔定義**它們裝在�
 - 核心 10 工具齊全 + osmedeus ✓ + optional 補齊：hakrawler/qsreplace/uro/git-dumper/waymore/paramspider + SecLists（`~/Tools/SecLists`，sparse Discovery/Web-Content+Fuzzing/XSS，379 wordlists）
 - 僅缺 bbot（大型 recon 引擎；Hermes 用 bb_subdomain_enum 6 源不依賴）
 - `~/go/bin` 已清空（487M 孤兒移除）；.bak 已刪
-- **Python 工具安裝法**：git-dumper/waymore 撞 Debian 系統 urllib3（動它會危及 Hermes Python）→ 用 `pipx install` 隔離 venv + `sudo ln -sf ~/.local/bin/<t> /usr/local/bin/<t>`（pipx 預設 ~/.local/bin 不在非互動 PATH）。paramspider 走 `pip install git+https://...`（不在 PyPI）。
+- **Python 工具安裝法 = 一律 uv（政策）**：不用 pip/pipx/brew。`python-tools.txt` 列清單，`scripts/setup_python_tools.sh [--system]` 用 `uv tool install` 裝（隔離 venv，自動避系統 urllib3 衝突，不碰 Hermes 系統 Python）。VPS 加 `--system` symlink `~/.local/bin/<t>` → `/usr/local/bin/<t>`（uv shim 預設 ~/.local/bin 不在非互動 PATH）。涵蓋:uro/waymore/git-dumper/arjun/paramspider（後者 `git+https://github.com/devanshbatham/paramspider.git`，不在 PyPI）。兩台皆 uv 管理（`uv tool list` 可查）。
 
 ### 終端/PATH 設定（2026-06-11 檢查）
 - **VPS 登入 shell = zsh**。互動 zsh 有 `~/go/bin`（.zshrc L106），但 **`ssh host 'cmd'` 非互動 + systemd 都不 source .zshrc** → 環境只有 `/usr/local/bin`。**∴ 自動化/Hermes 只認 `/usr/local/bin`**（再次印證 canonical 決策）。`.bashrc` L141 的 PATH 加 `~/go/bin`+`/usr/local/go/bin` 對 zsh-login 是 dead config（go 實際在 `/usr/bin/go`），無害。

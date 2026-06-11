@@ -1,0 +1,12 @@
+# bbflow Python 工具 — 一律用 uv tool install（環境隔離 + 控制）
+# 政策: Python 工具不用 pip/pipx/brew，統一 uv tool install（隔離 venv，避系統 urllib3 等衝突）。
+# 安裝: scripts/setup_python_tools.sh [--system]
+#   --system → 裝後 sudo symlink ~/.local/bin/<t> → /usr/local/bin/<t>
+#              （VPS 非互動 ssh / systemd 不 source rc，PATH 只有 /usr/local/bin）
+# 本地 macOS: ~/.local/bin 已在 PATH，免 --system。
+# 格式: 每行一個 uv tool install 目標（PyPI 名或 git+URL）
+uro
+waymore
+git-dumper
+arjun
+git+https://github.com/devanshbatham/paramspider.git
