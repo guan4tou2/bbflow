@@ -1,0 +1,66 @@
+id: bb-swagger-spec-exposed
+
+info:
+  name: OpenAPI / Swagger specification exposed
+  author: guan4tou2
+  severity: low
+  description: |
+    A reachable OpenAPI/Swagger JSON specification discloses the full API surface
+    (paths, parameters, auth schemes, internal models). Matches the actual JSON
+    spec — a version key (swagger/openapi) plus a paths object — not the Swagger
+    UI HTML and not an SPA catch-all shell. Complements hunt-swagger.sh.
+  reference:
+    - https://swagger.io/specification/
+  tags: bb-recon,swagger,openapi,api,disclosure
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/swagger.json"
+      - "{{BaseURL}}/swagger/v1/swagger.json"
+      - "{{BaseURL}}/openapi.json"
+      - "{{BaseURL}}/v2/api-docs"
+      - "{{BaseURL}}/v3/api-docs"
+      - "{{BaseURL}}/api-docs"
+      - "{{BaseURL}}/api/swagger.json"
+    stop-at-first-match: true
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+
+      - type: word
+        condition: or
+        part: body
+        words:
+          - '"swagger"'
+          - '"openapi"'
+
+      - type: word
+        part: body
+        words:
+          - '"paths"'
+
+      # catch-all aware: reject SPA / HTML shells that 200 on every path
+      - type: word
+        condition: or
+        negative: true
+        part: body
+        words:
+          - "<!doctype html"
+          - "<html"
+
+    extractors:
+      - type: regex
+        name: api_title
+        part: body
+        group: 1
+        regex:
+          - '"title"\s*:\s*"([^"]+)"'
+      - type: regex
+        name: spec_version
+        part: body
+        group: 1
+        regex:
+          - '"(?:swagger|openapi)"\s*:\s*"([^"]+)"'
