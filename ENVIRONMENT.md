@@ -26,9 +26,15 @@ bbflow 依賴 ~13 個外部 CLI（recon/掃描）。本檔定義**它們裝在�
 
 ## 平台現況（2026-06-11）
 
-**VPS** — 全部 `/usr/local/bin`，`bbflow doctor` 版本檢查 drift=0：
-- 核心 10 工具齊全 + bbot? / osmedeus ✓
-- `~/go/bin` 已清空（487M 孤兒移除）；舊版備份 `/usr/local/bin/{nuclei.v337,katana.v110}.bak`
+**VPS** — 全部 `/usr/local/bin`，`bbflow doctor` drift=0 / 無 missing：
+- 核心 10 工具齊全 + osmedeus ✓ + optional 補齊：hakrawler/qsreplace/uro/git-dumper/waymore/paramspider + SecLists（`~/Tools/SecLists`，sparse Discovery/Web-Content+Fuzzing/XSS，379 wordlists）
+- 僅缺 bbot（大型 recon 引擎；Hermes 用 bb_subdomain_enum 6 源不依賴）
+- `~/go/bin` 已清空（487M 孤兒移除）；.bak 已刪
+- **Python 工具安裝法**：git-dumper/waymore 撞 Debian 系統 urllib3（動它會危及 Hermes Python）→ 用 `pipx install` 隔離 venv + `sudo ln -sf ~/.local/bin/<t> /usr/local/bin/<t>`（pipx 預設 ~/.local/bin 不在非互動 PATH）。paramspider 走 `pip install git+https://...`（不在 PyPI）。
+
+### 終端/PATH 設定（2026-06-11 檢查）
+- **VPS 登入 shell = zsh**。互動 zsh 有 `~/go/bin`（.zshrc L106），但 **`ssh host 'cmd'` 非互動 + systemd 都不 source .zshrc** → 環境只有 `/usr/local/bin`。**∴ 自動化/Hermes 只認 `/usr/local/bin`**（再次印證 canonical 決策）。`.bashrc` L141 的 PATH 加 `~/go/bin`+`/usr/local/go/bin` 對 zsh-login 是 dead config（go 實際在 `/usr/bin/go`），無害。
+- **本地 macOS** zsh：`.zshrc` 用 `typeset -U path` 陣列（含 pdtm `~/.pdtm/go/bin` + `~/go/bin`），PATH 乾淨無重複。`gf` 被 oh-my-zsh git plugin alias 成 `git fetch`（互動 shell；bbflow 非互動 bash 不受影響）。
 
 **本地（macOS）** — 四種安裝法混用（works，未強制統一）：
 - brew：subfinder/httpx/katana/ffuf/dalfox/nmap（`/opt/homebrew/bin`）
