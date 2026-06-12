@@ -36,12 +36,16 @@ bbflow 依賴 ~13 個外部 CLI（recon/掃描）。本檔定義**它們裝在�
 - **VPS 登入 shell = zsh**。互動 zsh 有 `~/go/bin`（.zshrc L106），但 **`ssh host 'cmd'` 非互動 + systemd 都不 source .zshrc** → 環境只有 `/usr/local/bin`。**∴ 自動化/Hermes 只認 `/usr/local/bin`**（再次印證 canonical 決策）。`.bashrc` L141 的 PATH 加 `~/go/bin`+`/usr/local/go/bin` 對 zsh-login 是 dead config（go 實際在 `/usr/bin/go`），無害。
 - **本地 macOS** zsh：`.zshrc` 用 `typeset -U path` 陣列（含 pdtm `~/.pdtm/go/bin` + `~/go/bin`），PATH 乾淨無重複。`gf` 被 oh-my-zsh git plugin alias 成 `git fetch`（互動 shell；bbflow 非互動 bash 不受影響）。
 
-**本地（macOS）** — 四種安裝法混用（works，未強制統一）：
-- brew：subfinder/httpx/katana/ffuf/dalfox/nmap（`/opt/homebrew/bin`）
-- pdtm：nuclei（`~/.pdtm/go/bin`，ProjectDiscovery Tool Manager）
-- go：gau/waybackurls（`~/go/bin`）
-- **坑**：`gf` 被 shell alias 成 `git fetch`（互動 shell）；bbflow 非互動 bash 不受影響，仍解析 `~/go/bin/gf`
-- 缺：dnsx（subfinder companion，非 hunter 必需）
+**本地（macOS）** — 已對齊 lock，`check_tool_versions` drift=0：
+- go install @lock → `~/go/bin`：nuclei v3.8.0 / httpx v1.9.0 / dnsx v1.2.3 / hakrawler / gau / waybackurls / qsreplace
+- brew（`/opt/homebrew/bin`，版本已符合 lock）：subfinder v2.14.0 / katana v1.6.1 / ffuf v2.1.0 / dalfox / nmap
+- Python 工具 uv（`~/.local/bin`）：uro/waymore/git-dumper/arjun/paramspider
+- SecLists：`~/Tools/SecLists`（sparse，379 wordlists）
+- 不裝：osmedeus（VPS-required）、bbot
+- **坑（已修/已知）**：
+  - `httpx` 曾被 brew 的 **Python httpx**（httpie 系，壞的）遮蔽 PD httpx → 已移除 orphan、go install PD httpx v1.9.0
+  - nuclei/httpx 原 pdtm 管（`~/.pdtm/go/bin`，給舊版 v3.4.7/v1.7.1）→ 移除 pdtm shadow，改 go install @lock 生效
+  - `gf` 被 oh-my-zsh git plugin alias 成 `git fetch`（互動 shell）；bbflow 非互動 bash 不受影響，仍解析 `~/go/bin/gf`
 
 ## 常見坑
 
