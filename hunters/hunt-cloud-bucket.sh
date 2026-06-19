@@ -4,10 +4,15 @@
 # 從 org/domain 名稱推測 S3 / GCS / Azure Blob bucket 名稱，
 # 判斷 bucket 是否存在、是否可列目錄（listable）。
 #
-# Severity：
-#   CRITICAL — bucket listable（任何人可列出/下載內容）
-#   HIGH     — bucket 存在，private（可能 IDOR/misconfig 路徑）
+# Severity（機械 hunter 只報訊號，不自動賦 CRITICAL — ownership/sensitivity 交 LLM 判斷）：
+#   HIGH     — listable 且內容引用 target（疑似真 exposure，待確認 sensitivity 才升 CRITICAL）
+#   REVIEW   — listable 但內容無 target 引用（namespace-permutation 碰撞嫌疑，先驗 ownership）
+#   HIGH     — bucket 存在 403 private（可能 IDOR/misconfig 路徑）
 #   INFO     — bucket 不存在
+#
+# 為何不直接 CRITICAL：候選名是 org base + 通用 suffix 的 permutation（-public/-backup/
+# -api…），通用名跨無關 org 碰撞 → listable ≠ owned。CRITICAL 需 content-based ownership
+# + confirmed sensitive content，那是 LLM 判斷不是 substring match。
 #
 # 用法（domain 模式，bbflow 從 ROOT_DOMAIN 呼叫）：
 #   ./hunt-cloud-bucket.sh example.com
@@ -29,6 +34,17 @@ log(){ echo "[$(date +%H:%M:%S)] $*" | tee -a "$OUT"; }
 hit(){ echo "🔴 $*" | tee -a "$OUT"; }
 warn(){ echo "🟠 $*" | tee -a "$OUT"; }
 info_hit(){ echo "🟡 $*" | tee -a "$OUT"; }
+
+# Ownership signal — a listable bucket is only a real exposure if its CONTENTS
+# reference the target. Candidate names are org-base + generic suffix permutations
+# (-public/-backup/-api…) that collide across unrelated orgs, so listable ≠ owned.
+# Returns 0 if the listing's keys/contents reference BASE or DOMAIN. Cheap: one
+# extra fetch of up to 200 keys, only called when a bucket is already listable.
+own_ref(){
+  local url="$1" listing
+  listing=$(curl -sk -m 10 "${url}?max-keys=200" 2>/dev/null | head -c 20000)
+  printf '%s' "$listing" | grep -qiE "$BASE|$DOMAIN"
+}
 
 # ── 候選名稱生成（org base + 常見 suffix / prefix）──────────────────────────
 SUFFIXES=(
@@ -62,9 +78,15 @@ check_s3() {
 
   case "$code" in
     200)
-      echo "$body" | grep -q "ListBucketResult" && \
-        hit "[CRITICAL] S3 LISTABLE: $url" || \
+      if echo "$body" | grep -q "ListBucketResult"; then
+        if own_ref "$url"; then
+          warn "[HIGH] S3 LISTABLE + content references target ($BASE): $url — verify sensitivity before CRITICAL"
+        else
+          info_hit "[REVIEW] S3 listable but NO '$BASE'/'$DOMAIN' reference in contents (likely namespace collision — verify ownership before any severity): $url"
+        fi
+      else
         warn "[HIGH] S3 exists (200, not listable?): $url"
+      fi
       ;;
     403)
       # Exists but private — still interesting
@@ -87,9 +109,15 @@ check_gcs() {
 
   case "$code" in
     200)
-      echo "$body" | grep -q "ListBucketResult\|<Contents>" && \
-        hit "[CRITICAL] GCS LISTABLE: $url" || \
+      if echo "$body" | grep -q "ListBucketResult\|<Contents>"; then
+        if own_ref "$url"; then
+          warn "[HIGH] GCS LISTABLE + content references target ($BASE): $url — verify sensitivity before CRITICAL"
+        else
+          info_hit "[REVIEW] GCS listable but NO '$BASE'/'$DOMAIN' reference in contents (likely namespace collision — verify ownership before any severity): $url"
+        fi
+      else
         warn "[HIGH] GCS exists (200): $url"
+      fi
       ;;
     403)
       warn "[HIGH] GCS exists (403 private): $url"
