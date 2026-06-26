@@ -75,6 +75,14 @@ else
     echo "$DOMAIN" | "$GAU" --threads 5 --subs \
       --blacklist eot,svg,ttf,woff,png,jpg,gif,ico,css,pdf 2>/dev/null >> "$ALL_URLS" || true
   fi
+  WAYMORE="$(command -v waymore 2>/dev/null || echo '')"
+  if [ -n "$WAYMORE" ]; then
+    WM_DIR="$OUT_DIR/waymore"
+    mkdir -p "$WM_DIR"
+    "$WAYMORE" -i "$DOMAIN" -mode U -oU "$WM_DIR/urls.txt" \
+      -f -t 30 -p 3 --stream -nlf 2>/dev/null || true
+    [ -s "$WM_DIR/urls.txt" ] && cat "$WM_DIR/urls.txt" >> "$ALL_URLS"
+  fi
 fi
 
 # ── gf xss filter ─────────────────────────────────────────

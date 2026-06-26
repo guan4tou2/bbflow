@@ -26,6 +26,8 @@ log(){ echo "[$(date +%H:%M:%S)] $*" | tee -a "$OUT"; }
 hit(){ echo "🔴 $*" | tee -a "$OUT"; }
 info_hit(){ echo "🟡 $*" | tee -a "$OUT"; }
 
+WAYMORE="$(command -v waymore 2>/dev/null || echo '')"
+
 log "=== Wayback CDX endpoint mine: $DOMAIN ==="
 
 # ── CDX API 查詢 ───────────────────────────────────────────────────────────────
@@ -35,22 +37,42 @@ CDX_PARAMS="url=*.${DOMAIN}/*&output=json&fl=original&collapse=urlkey&limit=8000
 log "  Querying CDX API (limit 8000 unique URLs)..."
 CDX_RAW=$(curl -sk -m 60 "${CDX_URL}?${CDX_PARAMS}" 2>/dev/null)
 
-if [ -z "$CDX_RAW" ] || [ "$CDX_RAW" = "[]" ]; then
-  log "  No CDX data found for $DOMAIN"
-  exit 0
-fi
-
-# Parse URLs from CDX JSON (format: [["original"], [url1], [url2], ...])
-ALL_URLS=$(echo "$CDX_RAW" | python3 -c "
+CDX_URLS=""
+if [ -n "$CDX_RAW" ] && [ "$CDX_RAW" != "[]" ]; then
+  CDX_URLS=$(echo "$CDX_RAW" | python3 -c "
 import sys, json
 try:
     rows = json.load(sys.stdin)
-    for row in rows[1:]:  # skip header
+    for row in rows[1:]:
         if row and row[0]:
             print(row[0])
 except:
     pass
 " 2>/dev/null)
+fi
+
+# ── waymore 補充（multi-source：CommonCrawl + OTX + URLScan + VirusTotal）────
+WAYMORE_URLS=""
+if [ -n "$WAYMORE" ]; then
+  log "  waymore: querying 7 sources (Wayback+CC+OTX+URLScan+VT+IntelX+GA)..."
+  WAYMORE_DIR="$OUT_DIR/waymore_${SLUG}"
+  mkdir -p "$WAYMORE_DIR"
+  "$WAYMORE" -i "$DOMAIN" -mode U -oU "$WAYMORE_DIR/urls.txt" \
+    -f -t 30 -p 3 --stream -nlf 2>/dev/null || true
+  if [ -s "$WAYMORE_DIR/urls.txt" ]; then
+    WAYMORE_URLS=$(cat "$WAYMORE_DIR/urls.txt")
+    WM_COUNT=$(wc -l < "$WAYMORE_DIR/urls.txt" | tr -d ' ')
+    log "  waymore: $WM_COUNT additional URLs"
+  fi
+fi
+
+# merge + dedup
+ALL_URLS=$(printf '%s\n%s' "$CDX_URLS" "$WAYMORE_URLS" | sort -u | grep -v '^$')
+
+if [ -z "$ALL_URLS" ]; then
+  log "  No URLs found from any source"
+  exit 0
+fi
 
 TOTAL=$(echo "$ALL_URLS" | wc -l | tr -d ' ')
 log "  Total unique URLs from CDX: $TOTAL"
