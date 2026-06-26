@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
-# bbflow.sh — 統一 Bug Bounty Flow CLI  v1.7.0
+# bbflow.sh — 統一 Bug Bounty Flow CLI  v1.9.0
 # 零 LLM 依賴。所有 subcommand 都是 bash + curl + python3 stdlib。
+#
+# v1.9.0 (2026-06-27): +3 hunters (cdn-detect, search-engines, subdomain-permute),
+#   `bbflow tools` subcommand — tool inventory with versions
 #
 # v1.8.0 (2026-06-26): +4 hunters (crlf-inject, dns-deep, tls-audit, oob-interact),
 #   hunter-chains.sh auto-chaining, VPS: +tlsx/cdncheck/alterx/uncover
@@ -1100,6 +1103,9 @@ EOF
   run_hunter dns-deep      "$TOOLS_DIR/hunters/hunt-dns-deep.sh"          domain
   run_hunter tls-audit     "$TOOLS_DIR/hunters/hunt-tls-audit.sh"         host
   run_hunter oob-interact  "$TOOLS_DIR/hunters/hunt-oob-interact.sh"      url
+  run_hunter cdn-detect    "$TOOLS_DIR/hunters/hunt-cdn-detect.sh"        host
+  run_hunter search-engines "$TOOLS_DIR/hunters/hunt-search-engines.sh"  domain
+  run_hunter subdomain-permute "$TOOLS_DIR/hunters/hunt-subdomain-permute.sh" domain
   # subdomain-takeover: feed individual hostnames (dig CNAME), skip live_hosts loop
   if want takeover; then
     info "hunter: takeover (per-subdomain)"
@@ -1774,10 +1780,70 @@ cmd_dedupe() {
   done
 }
 
+# ── cmd: tools ────────────────────────────────────────────────
+cmd_tools() {
+  echo "${B}== bbflow v1.8.0 — Tool Inventory ==${N}"
+  echo ""
+  local total=0 found=0
+  _chk() {
+    local name="$1" install="$2"
+    total=$((total+1))
+    local bin
+    bin="$(command -v "$name" 2>/dev/null || echo '')"
+    if [ -n "$bin" ]; then
+      found=$((found+1))
+      local ver
+      ver=$("$bin" -version 2>&1 | head -1 | grep -oE '[0-9]+\.[0-9]+[.0-9]*' | head -1)
+      printf "  ✅ %-22s %s  %s\n" "$name" "${ver:-unknown}" "$bin"
+    else
+      printf "  ❌ %-22s %-10s %s\n" "$name" "missing" "$install"
+    fi
+  }
+  echo "${B}Core:${N}"
+  _chk httpx      "go install github.com/projectdiscovery/httpx/cmd/httpx@latest"
+  _chk nuclei     "go install github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest"
+  _chk subfinder  "go install github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest"
+  _chk katana     "go install github.com/projectdiscovery/katana/cmd/katana@latest"
+  _chk ffuf       "go install github.com/ffuf/ffuf/v2@latest"
+  _chk dalfox     "go install github.com/hahwul/dalfox/v2@latest"
+  echo ""
+  echo "${B}DNS & Subdomain:${N}"
+  _chk dnsx       "go install github.com/projectdiscovery/dnsx/cmd/dnsx@latest"
+  _chk tlsx       "go install github.com/projectdiscovery/tlsx/cmd/tlsx@latest"
+  _chk alterx     "go install github.com/projectdiscovery/alterx/cmd/alterx@latest"
+  _chk cdncheck   "go install github.com/projectdiscovery/cdncheck/cmd/cdncheck@latest"
+  echo ""
+  echo "${B}URL & Param:${N}"
+  _chk gau        "go install github.com/lc/gau/v2/cmd/gau@latest"
+  _chk waymore    "uv tool install waymore"
+  _chk unfurl     "go install github.com/tomnomnom/unfurl@latest"
+  _chk qsreplace  "go install github.com/tomnomnom/qsreplace@latest"
+  _chk anew       "go install github.com/tomnomnom/anew@latest"
+  _chk arjun      "uv tool install arjun"
+  _chk paramspider "uv tool install paramspider"
+  _chk hakrawler  "go install github.com/hakluke/hakrawler@latest"
+  _chk kxss       "go install github.com/tomnomnom/hacks/kxss@latest"
+  echo ""
+  echo "${B}Secrets & Git:${N}"
+  _chk trufflehog "brew install trufflehog"
+  _chk gitleaks   "brew install gitleaks"
+  _chk git-dumper "uv tool install git-dumper"
+  echo ""
+  echo "${B}Recon & Search:${N}"
+  _chk uncover    "go install github.com/projectdiscovery/uncover/cmd/uncover@latest"
+  _chk s3scanner  "uv tool install s3scanner"
+  _chk interactsh-client "go install github.com/projectdiscovery/interactsh/cmd/interactsh-client@latest"
+  _chk notify     "go install github.com/projectdiscovery/notify/cmd/notify@latest"
+  echo ""
+  echo "${B}Summary: $found/$total tools available${N}"
+  echo "Profile: ${BBFLOW_PROFILE:-safe} | Hunters: $(ls "$TOOLS_DIR/hunters"/*.sh 2>/dev/null | wc -l | tr -d ' ') | Templates: $(ls "$TOOLS_DIR/templates/kb-custom"/*.yaml 2>/dev/null | wc -l | tr -d ' ')"
+}
+
 # ── Main dispatch ────────────────────────────────────────────
 SUB="${1:-help}"; shift 2>/dev/null || true
 case "$SUB" in
   doctor)         cmd_doctor;;
+  tools)          cmd_tools;;
   init)           cmd_init "$@";;
   recon)          cmd_recon "$@";;
   hunt)           cmd_hunt "$@";;
