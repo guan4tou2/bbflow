@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
-# bbflow.sh — 統一 Bug Bounty Flow CLI  v1.9.0
+# bbflow.sh — 統一 Bug Bounty Flow CLI  v2.0.0
 # 零 LLM 依賴。所有 subcommand 都是 bash + curl + python3 stdlib。
+#
+# v2.0.0 (2026-06-27): stealth profile, `bbflow update/report/wordlists/dry-run`,
+#   report generator (HUNTERS_REPORT.md), one-click tool update, wordlist manager,
+#   hunter dry-run syntax validator. 59 hunters, 3 profiles (safe/deep/stealth)
 #
 # v1.9.0 (2026-06-27): +3 hunters (cdn-detect, search-engines, subdomain-permute),
 #   `bbflow tools` subcommand — tool inventory with versions
@@ -117,20 +121,24 @@ ${B}bbflow${N} — Unified Bug Bounty Flow CLI (零 LLM)
 
 ${B}Usage:${N}
   bbflow doctor                    檢查依賴
+  bbflow tools                     列出 26 工具安裝狀態+版本
   bbflow test                      對 example.com 跑 null-case regression test
+  bbflow dry-run                   驗證所有 hunter 語法+必要 pattern
   bbflow init <target>             初始化 workshop/<target>/ + SCOPE.md
   bbflow recon <target> [--scope-file SCOPE.md] [--osmedeus]
   bbflow hunt <target> [--scope-file SCOPE.md] [--only h1,...]
   bbflow hunt --list <file> --scope-file SCOPE.md [--name <slug>] [--probe] [--only h1,...]
   bbflow flow <target> [--scope-file SCOPE.md]   recon + hunt + report 一條龍
   bbflow flow --list <file> --scope-file SCOPE.md [--name <slug>] [--probe]
+  bbflow report <target>           彙整 hunt 結果 → HUNTERS_REPORT.md
   bbflow dedupe <target>           對比已送報告找重複
   bbflow status [<target>]
   bbflow list
-  bbflow report <target>
   bbflow scope <target>
   bbflow submit-checklist <hitcon|twcert>
+  bbflow update                    一鍵更新所有 Go/Python 工具到最新版
   bbflow nuclei-update             更新官方 PD templates + clone Wordfence CVE repo
+  bbflow wordlists [list|download] 管理 SecLists + 自訂字典
 
 ${B}Examples:${N}
   bbflow doctor
@@ -1675,7 +1683,7 @@ cmd_status() {
   [ -n "$LATEST" ] && info "latest report: $LATEST"
 }
 
-cmd_report() { cmd_hunt "$@"; }
+cmd_report() { cmd_report_summary "$@"; }
 
 # ── cmd: test (regression smoke on example.com) ───────────────
 cmd_test() {
@@ -1780,9 +1788,393 @@ cmd_dedupe() {
   done
 }
 
+# ── cmd: update (update all Go/Python tools) ──────────────────
+cmd_update() {
+  echo "${B}== bbflow update — upgrading all tools ==${N}"
+  echo ""
+
+  local total=0 ok_count=0 fail_count=0 skip_count=0
+
+  _upgrade_go() {
+    local name="$1" pkg="$2"
+    total=$((total+1))
+    if ! command -v go &>/dev/null; then
+      warn "$name — go not found, skipping"
+      skip_count=$((skip_count+1))
+      return
+    fi
+    printf "  ⏳ %-22s ... " "$name"
+    if go install "$pkg" 2>/dev/null; then
+      local ver
+      ver=$("$name" -version 2>&1 | head -1 | grep -oE '[0-9]+\.[0-9]+[.0-9]*' | head -1)
+      echo "${G}✓${N} ${ver:-updated}"
+      ok_count=$((ok_count+1))
+    else
+      echo "${R}✗${N} failed"
+      fail_count=$((fail_count+1))
+    fi
+  }
+
+  _upgrade_uv() {
+    local name="$1" pkg="$2"
+    total=$((total+1))
+    if ! command -v uv &>/dev/null; then
+      warn "$name — uv not found, skipping"
+      skip_count=$((skip_count+1))
+      return
+    fi
+    printf "  ⏳ %-22s ... " "$name"
+    if uv tool install --upgrade "$pkg" 2>/dev/null; then
+      echo "${G}✓${N} updated"
+      ok_count=$((ok_count+1))
+    else
+      echo "${R}✗${N} failed"
+      fail_count=$((fail_count+1))
+    fi
+  }
+
+  echo "${B}Go tools:${N}"
+  _upgrade_go httpx      "github.com/projectdiscovery/httpx/cmd/httpx@latest"
+  _upgrade_go nuclei     "github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest"
+  _upgrade_go subfinder  "github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest"
+  _upgrade_go katana     "github.com/projectdiscovery/katana/cmd/katana@latest"
+  _upgrade_go ffuf       "github.com/ffuf/ffuf/v2@latest"
+  _upgrade_go dalfox     "github.com/hahwul/dalfox/v2@latest"
+  _upgrade_go dnsx       "github.com/projectdiscovery/dnsx/cmd/dnsx@latest"
+  _upgrade_go tlsx       "github.com/projectdiscovery/tlsx/cmd/tlsx@latest"
+  _upgrade_go alterx     "github.com/projectdiscovery/alterx/cmd/alterx@latest"
+  _upgrade_go cdncheck   "github.com/projectdiscovery/cdncheck/cmd/cdncheck@latest"
+  _upgrade_go gau        "github.com/lc/gau/v2/cmd/gau@latest"
+  _upgrade_go unfurl     "github.com/tomnomnom/unfurl@latest"
+  _upgrade_go qsreplace  "github.com/tomnomnom/qsreplace@latest"
+  _upgrade_go anew       "github.com/tomnomnom/anew@latest"
+  _upgrade_go hakrawler  "github.com/hakluke/hakrawler@latest"
+  _upgrade_go kxss       "github.com/tomnomnom/hacks/kxss@latest"
+  _upgrade_go uncover    "github.com/projectdiscovery/uncover/cmd/uncover@latest"
+  _upgrade_go notify     "github.com/projectdiscovery/notify/cmd/notify@latest"
+  _upgrade_go interactsh-client "github.com/projectdiscovery/interactsh/cmd/interactsh-client@latest"
+
+  echo ""
+  echo "${B}Python tools:${N}"
+  _upgrade_uv waymore    "waymore"
+  _upgrade_uv arjun      "arjun"
+  _upgrade_uv paramspider "paramspider"
+  _upgrade_uv git-dumper "git-dumper"
+  _upgrade_uv s3scanner  "s3scanner"
+
+  echo ""
+  echo "${B}Summary: ${ok_count} updated, ${fail_count} failed, ${skip_count} skipped (${total} total)${N}"
+
+  # Also update nuclei templates
+  echo ""
+  cmd_nuclei_update
+}
+
+# ── cmd: report-summary (aggregate hunt results → markdown) ───
+cmd_report_summary() {
+  local T="${1:-}"
+  [ -z "$T" ] && { err "usage: bbflow report <target>"; exit 1; }
+  local DIR="$BASE_DIR/workshop/$T"
+  [ ! -d "$DIR/hunters" ] && { err "no hunters output for $T (run: bbflow hunt $T)"; exit 1; }
+
+  local REPORT="$DIR/HUNTERS_REPORT.md"
+  local NOW
+  NOW=$(date "+%Y-%m-%d %H:%M")
+
+  echo "${B}== Generating hunt report: $T ==${N}"
+
+  {
+    echo "# Hunter Report: $T"
+    echo ""
+    echo "> Generated: $NOW | Profile: ${BBFLOW_PROFILE:-safe}"
+    echo ""
+
+    # Count totals
+    local total_hits=0 total_hunters=0 hunters_with_hits=0
+    for hdir in "$DIR/hunters"/*/; do
+      [ ! -d "$hdir" ] && continue
+      local hname
+      hname=$(basename "$hdir")
+      total_hunters=$((total_hunters+1))
+      local hits
+      hits=$(grep -ch "^🔴" "$hdir"/*.txt 2>/dev/null | paste -sd+ - | bc 2>/dev/null || echo 0)
+      total_hits=$((total_hits + hits))
+      [ "$hits" -gt 0 ] && hunters_with_hits=$((hunters_with_hits+1))
+    done
+
+    echo "## Summary"
+    echo ""
+    echo "| Metric | Value |"
+    echo "|--------|-------|"
+    echo "| Total hunters run | $total_hunters |"
+    echo "| Hunters with hits | $hunters_with_hits |"
+    echo "| Total confirmed hits | $total_hits |"
+    echo ""
+
+    # Critical hits first
+    local crit_hits
+    crit_hits=$(grep -rh "^🔴" "$DIR/hunters/"*/*.txt 2>/dev/null | sort -u)
+    if [ -n "$crit_hits" ]; then
+      echo "## Critical Findings (🔴)"
+      echo ""
+      echo '```'
+      echo "$crit_hits"
+      echo '```'
+      echo ""
+    fi
+
+    # Warnings
+    local warn_hits
+    warn_hits=$(grep -rh "^🟡" "$DIR/hunters/"*/*.txt 2>/dev/null | sort -u)
+    if [ -n "$warn_hits" ]; then
+      echo "## Warnings (🟡)"
+      echo ""
+      echo '```'
+      echo "$warn_hits"
+      echo '```'
+      echo ""
+    fi
+
+    # Info
+    local info_hits
+    info_hits=$(grep -rh "^🟢" "$DIR/hunters/"*/*.txt 2>/dev/null | sort -u)
+    if [ -n "$info_hits" ]; then
+      echo "## Info (🟢)"
+      echo ""
+      echo '```'
+      echo "$info_hits"
+      echo '```'
+      echo ""
+    fi
+
+    # Per-hunter breakdown
+    echo "## Per-Hunter Breakdown"
+    echo ""
+    echo "| Hunter | Hits | Status |"
+    echo "|--------|------|--------|"
+    for hdir in "$DIR/hunters"/*/; do
+      [ ! -d "$hdir" ] && continue
+      local hname
+      hname=$(basename "$hdir")
+      local hits
+      hits=$(grep -ch "^🔴" "$hdir"/*.txt 2>/dev/null | paste -sd+ - | bc 2>/dev/null || echo 0)
+      local warns
+      warns=$(grep -ch "^🟡" "$hdir"/*.txt 2>/dev/null | paste -sd+ - | bc 2>/dev/null || echo 0)
+      local status="clean"
+      [ "$warns" -gt 0 ] && status="⚠️ $warns warnings"
+      [ "$hits" -gt 0 ] && status="🔴 $hits confirmed"
+      echo "| $hname | $hits | $status |"
+    done
+    echo ""
+
+    # Timestamp
+    echo "---"
+    echo "*Report generated by bbflow report at $NOW*"
+  } > "$REPORT"
+
+  ok "report written → $REPORT"
+  echo ""
+  info "Summary: $total_hits hits across $hunters_with_hits/$total_hunters hunters"
+
+  # Print critical findings to stdout
+  if [ -n "${crit_hits:-}" ]; then
+    echo ""
+    echo "${R}Critical findings:${N}"
+    echo "$crit_hits" | head -20
+  fi
+}
+
+# ── cmd: wordlists (manage SecLists + custom wordlists) ───────
+cmd_wordlists() {
+  local action="${1:-list}"
+  local WL_DIR="$TOOLS_DIR/wordlists"
+
+  case "$action" in
+    list)
+      echo "${B}== bbflow wordlists ==${N}"
+      echo ""
+
+      # SecLists
+      if [ -n "${SECLISTS:-}" ] && [ -d "$SECLISTS" ]; then
+        local sl_count
+        sl_count=$(find "$SECLISTS" -name "*.txt" 2>/dev/null | wc -l | tr -d ' ')
+        ok "SecLists: $SECLISTS ($sl_count files)"
+        echo "   Discovery/Web-Content: $(ls "$SECLISTS/Discovery/Web-Content/"*.txt 2>/dev/null | wc -l | tr -d ' ') wordlists"
+        echo "   Fuzzing:               $(ls "$SECLISTS/Fuzzing/"*.txt 2>/dev/null | wc -l | tr -d ' ') wordlists"
+        echo "   Passwords:             $(ls "$SECLISTS/Passwords/"*.txt 2>/dev/null | wc -l | tr -d ' ') wordlists"
+        echo "   Usernames:             $(ls "$SECLISTS/Usernames/"*.txt 2>/dev/null | wc -l | tr -d ' ') wordlists"
+      else
+        warn "SecLists not found"
+        info "Install: brew install seclists  OR  git clone https://github.com/danielmiessler/SecLists.git ~/Tools/SecLists"
+      fi
+      echo ""
+
+      # Bundled wordlists
+      if [ -d "$WL_DIR" ]; then
+        local bwl_count
+        bwl_count=$(find "$WL_DIR" -name "*.txt" 2>/dev/null | wc -l | tr -d ' ')
+        ok "Bundled: $WL_DIR ($bwl_count files)"
+        for f in "$WL_DIR"/*.txt; do
+          [ -f "$f" ] || continue
+          local lines
+          lines=$(wc -l < "$f" | tr -d ' ')
+          printf "   %-40s %s lines\n" "$(basename "$f")" "$lines"
+        done
+      else
+        info "No bundled wordlists yet (run: bbflow wordlists download)"
+      fi
+      echo ""
+
+      # Common wordlist paths used by hunters
+      echo "${B}Key wordlists for hunters:${N}"
+      _check_wl() {
+        local label="$1" path="$2"
+        if [ -f "$path" ]; then
+          local lines
+          lines=$(wc -l < "$path" | tr -d ' ')
+          ok "$label ($lines lines)"
+        else
+          warn "$label — not found"
+        fi
+      }
+      _check_wl "ffuf dirs (raft-medium)" "${SECLISTS:-/dev/null}/Discovery/Web-Content/raft-medium-directories.txt"
+      _check_wl "ffuf files (raft-medium)" "${SECLISTS:-/dev/null}/Discovery/Web-Content/raft-medium-files.txt"
+      _check_wl "backup extensions"        "${SECLISTS:-/dev/null}/Discovery/Web-Content/web-extensions.txt"
+      _check_wl "common params"            "${SECLISTS:-/dev/null}/Discovery/Web-Content/burp-parameter-names.txt"
+      _check_wl "LFI payloads"             "${SECLISTS:-/dev/null}/Fuzzing/LFI/LFI-Jhaddix.txt"
+      _check_wl "open-redirect payloads"   "${SECLISTS:-/dev/null}/Fuzzing/open-redirect-payloads.txt"
+      ;;
+
+    download)
+      echo "${B}== Downloading wordlists ==${N}"
+      mkdir -p "$WL_DIR"
+
+      # SecLists
+      if [ -z "${SECLISTS:-}" ] || [ ! -d "${SECLISTS:-}" ]; then
+        if command -v brew &>/dev/null; then
+          info "Installing SecLists via brew..."
+          brew install seclists 2>&1 | tail -3
+        else
+          local TARGET_SL="$HOME/Tools/SecLists"
+          if [ ! -d "$TARGET_SL" ]; then
+            info "Cloning SecLists to $TARGET_SL..."
+            mkdir -p "$HOME/Tools"
+            git clone --depth=1 https://github.com/danielmiessler/SecLists.git "$TARGET_SL" 2>&1 | tail -3
+          fi
+        fi
+        ok "SecLists installed"
+      else
+        ok "SecLists already present at $SECLISTS"
+      fi
+
+      # OneListForAll (compact, high-signal)
+      local OLFA="$WL_DIR/onelistforall.txt"
+      if [ ! -f "$OLFA" ]; then
+        info "Downloading OneListForAll..."
+        curl -sL "https://raw.githubusercontent.com/six2dez/OneListForAll/main/onelistforallshort.txt" -o "$OLFA" 2>/dev/null
+        [ -s "$OLFA" ] && ok "onelistforall.txt ($(wc -l < "$OLFA" | tr -d ' ') lines)" || warn "download failed"
+      else
+        ok "onelistforall.txt already present"
+      fi
+
+      # fuzz.txt (Bo0oM)
+      local FUZZ="$WL_DIR/fuzz.txt"
+      if [ ! -f "$FUZZ" ]; then
+        info "Downloading fuzz.txt (Bo0oM)..."
+        curl -sL "https://raw.githubusercontent.com/Bo0oM/fuzz.txt/master/fuzz.txt" -o "$FUZZ" 2>/dev/null
+        [ -s "$FUZZ" ] && ok "fuzz.txt ($(wc -l < "$FUZZ" | tr -d ' ') lines)" || warn "download failed"
+      else
+        ok "fuzz.txt already present"
+      fi
+
+      # Assetnote wordlists — top API/JS paths
+      local AN="$WL_DIR/assetnote-httparchive-apiroutes.txt"
+      if [ ! -f "$AN" ]; then
+        info "Downloading Assetnote API routes..."
+        curl -sL "https://wordlists-cdn.assetnote.io/data/automated/httparchive_apiroutes_2024_11_28.txt" -o "$AN" 2>/dev/null
+        [ -s "$AN" ] && ok "assetnote-httparchive-apiroutes.txt ($(wc -l < "$AN" | tr -d ' ') lines)" || warn "download failed"
+      else
+        ok "assetnote-httparchive-apiroutes.txt already present"
+      fi
+
+      echo ""
+      cmd_wordlists list
+      ;;
+
+    *)
+      echo "Usage: bbflow wordlists [list|download]"
+      echo "  list     — show installed wordlists and their status"
+      echo "  download — install SecLists + curated wordlists"
+      ;;
+  esac
+}
+
+# ── cmd: dry-run (syntax + flow validation without network) ───
+cmd_dryrun() {
+  echo "${B}== bbflow dry-run — hunter syntax validation ==${N}"
+  echo ""
+  local total=0 pass=0 fail=0 skip=0
+  local HUNTERS_DIR="$TOOLS_DIR/hunters"
+
+  for script in "$HUNTERS_DIR"/hunt-*.sh; do
+    [ ! -f "$script" ] && continue
+    local name
+    name=$(basename "$script" .sh)
+    total=$((total+1))
+
+    # Phase 1: bash -n syntax check
+    if ! bash -n "$script" 2>/dev/null; then
+      err "$name — syntax error"
+      fail=$((fail+1))
+      continue
+    fi
+
+    # Phase 2: check required patterns
+    local issues=""
+
+    # Must have set -uo pipefail
+    if ! grep -q 'set -uo pipefail' "$script"; then
+      issues+="missing 'set -uo pipefail'; "
+    fi
+
+    # Must source tool-profiles.sh
+    if ! grep -q 'tool-profiles.sh' "$script"; then
+      issues+="not sourcing tool-profiles.sh; "
+    fi
+
+    # Must have OUT_DIR
+    if ! grep -q 'OUT_DIR' "$script"; then
+      issues+="no OUT_DIR handling; "
+    fi
+
+    # Should have usage/help
+    if ! grep -qE 'usage|Usage|\$0' "$script"; then
+      issues+="no usage message; "
+    fi
+
+    # Check for common anti-patterns
+    if grep -qE 'rm -rf /|rm -rf ~' "$script"; then
+      issues+="DANGEROUS: broad rm -rf; "
+    fi
+
+    if [ -n "$issues" ]; then
+      warn "$name — ${issues%%; }"
+      skip=$((skip+1))
+    else
+      ok "$name"
+      pass=$((pass+1))
+    fi
+  done
+
+  echo ""
+  echo "${B}Results: $pass passed, $skip warnings, $fail errors ($total hunters)${N}"
+  [ "$fail" -gt 0 ] && exit 1
+  return 0
+}
+
 # ── cmd: tools ────────────────────────────────────────────────
 cmd_tools() {
-  echo "${B}== bbflow v1.8.0 — Tool Inventory ==${N}"
+  echo "${B}== bbflow v2.0.0 — Tool Inventory ==${N}"
   echo ""
   local total=0 found=0
   _chk() {
@@ -1854,8 +2246,11 @@ case "$SUB" in
   scope)          cmd_scope "$@";;
   submit-checklist) cmd_submit_checklist "$@";;
   test)           cmd_test;;
+  dry-run)        cmd_dryrun;;
   dedupe)         cmd_dedupe "$@";;
+  update)         cmd_update;;
   nuclei-update)  cmd_nuclei_update;;
+  wordlists)      cmd_wordlists "$@";;
   help|-h|--help|"") usage;;
   *) err "unknown subcommand: $SUB"; usage; exit 1;;
 esac

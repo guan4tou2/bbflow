@@ -2,25 +2,37 @@
 
 ## Profiles
 
-bbflow 支援兩個掃描 profile，透過環境變數切換：
+bbflow 支援三個掃描 profile，透過環境變數切換：
 
 ```bash
-BBFLOW_PROFILE=safe bbflow hunt target   # 預設：保守速率
-BBFLOW_PROFILE=deep bbflow hunt target   # 深度：更高併發、遞迴、headless
+BBFLOW_PROFILE=safe    bbflow hunt target   # 預設：保守速率
+BBFLOW_PROFILE=deep    bbflow hunt target   # 深度：更高併發、遞迴、headless
+BBFLOW_PROFILE=stealth bbflow hunt target   # 隱匿：極低速率、隨機延遲、避觸 WAF
 ```
 
-| 參數 | safe | deep | 說明 |
-|------|------|------|------|
-| nuclei rate-limit | 5/s | 15/s | 單位秒請求數 |
-| nuclei bulk-size | 25 | 50 | 每批 template 數 |
-| nuclei retries | 2 | 3 | 失敗重試 |
-| katana depth | 3 | 5 | 爬蟲深度 |
-| katana headless | ✗ | ✓ | SPA JS rendering |
-| katana crawl time | 5m | 15m | 最大爬取時間 |
-| dalfox workers | 5 | 10 | 平行 XSS 掃描 |
-| dalfox delay | 100ms | 50ms | 請求間隔 |
-| ffuf recursion | 0 | 2 | 目錄遞迴深度 |
-| ffuf threads | 20 | 30 | 平行線程 |
+| 參數 | safe | deep | stealth | 說明 |
+|------|------|------|---------|------|
+| nuclei rate-limit | 5/s | 15/s | 2/s | 單位秒請求數 |
+| nuclei bulk-size | 25 | 50 | 10 | 每批 template 數 |
+| nuclei concurrency | 10 | 25 | 3 | 併發數 |
+| nuclei retries | 2 | 3 | 1 | 失敗重試 |
+| katana depth | 3 | 5 | 2 | 爬蟲深度 |
+| katana headless | ✗ | ✓ | ✗ | SPA JS rendering |
+| katana crawl time | 5m | 15m | 3m | 最大爬取時間 |
+| katana concurrency | 10 | 20 | 2 | 併發數 |
+| katana random delay | ✗ | ✗ | 1-3s | 隨機延遲 |
+| dalfox workers | 5 | 10 | 2 | 平行 XSS 掃描 |
+| dalfox delay | 100ms | 50ms | 500ms | 請求間隔 |
+| ffuf recursion | 0 | 2 | 0 | 目錄遞迴深度 |
+| ffuf threads | 20 | 30 | 5 | 平行線程 |
+| ffuf rate | 15/s | 25/s | 3/s | 速率限制 |
+| httpx threads | 50 | 50 | 5 | 併發數 |
+| httpx delay | ✗ | ✗ | 1-3s | 隨機延遲 |
+
+**Stealth profile 適用場景：**
+- 目標有嚴格 WAF/rate-limiting（如 Cloudflare Under Attack Mode）
+- 首次碰觸高敏感目標，需低調探測
+- 避免 IP 被 ban 的持久型掃描
 
 ## API Keys（強烈建議設定）
 

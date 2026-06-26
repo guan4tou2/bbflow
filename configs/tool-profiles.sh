@@ -4,26 +4,36 @@
 # 用法：在 hunter 開頭 source
 #   source "$(dirname "$0")/../configs/tool-profiles.sh"
 #
-# 兩個 profile：
-#   BBFLOW_PROFILE=safe    (預設) 保守掃描，適合第一次 recon
-#   BBFLOW_PROFILE=deep    深度掃描，已知 scope 內且允許較多流量
+# 三個 profile：
+#   BBFLOW_PROFILE=safe      (預設) 保守掃描，適合第一次 recon
+#   BBFLOW_PROFILE=deep      深度掃描，已知 scope 內且允許較多流量
+#   BBFLOW_PROFILE=stealth   極低速率+隨機延遲，適合高敏感/WAF 嚴格目標
 
 BBFLOW_PROFILE="${BBFLOW_PROFILE:-safe}"
 
 # ═══════════════════════════════════════════════════════════════
 # Nuclei
 # ═══════════════════════════════════════════════════════════════
-if [ "$BBFLOW_PROFILE" = "deep" ]; then
-  NUCLEI_RATE_LIMIT="${NUCLEI_RATE_LIMIT:-15}"
-  NUCLEI_BULK_SIZE="${NUCLEI_BULK_SIZE:-50}"
-  NUCLEI_CONCURRENCY="${NUCLEI_CONCURRENCY:-25}"
-  NUCLEI_RETRIES="${NUCLEI_RETRIES:-3}"
-else
-  NUCLEI_RATE_LIMIT="${NUCLEI_RATE_LIMIT:-5}"
-  NUCLEI_BULK_SIZE="${NUCLEI_BULK_SIZE:-25}"
-  NUCLEI_CONCURRENCY="${NUCLEI_CONCURRENCY:-10}"
-  NUCLEI_RETRIES="${NUCLEI_RETRIES:-2}"
-fi
+case "$BBFLOW_PROFILE" in
+  deep)
+    NUCLEI_RATE_LIMIT="${NUCLEI_RATE_LIMIT:-15}"
+    NUCLEI_BULK_SIZE="${NUCLEI_BULK_SIZE:-50}"
+    NUCLEI_CONCURRENCY="${NUCLEI_CONCURRENCY:-25}"
+    NUCLEI_RETRIES="${NUCLEI_RETRIES:-3}"
+    ;;
+  stealth)
+    NUCLEI_RATE_LIMIT="${NUCLEI_RATE_LIMIT:-2}"
+    NUCLEI_BULK_SIZE="${NUCLEI_BULK_SIZE:-10}"
+    NUCLEI_CONCURRENCY="${NUCLEI_CONCURRENCY:-3}"
+    NUCLEI_RETRIES="${NUCLEI_RETRIES:-1}"
+    ;;
+  *)
+    NUCLEI_RATE_LIMIT="${NUCLEI_RATE_LIMIT:-5}"
+    NUCLEI_BULK_SIZE="${NUCLEI_BULK_SIZE:-25}"
+    NUCLEI_CONCURRENCY="${NUCLEI_CONCURRENCY:-10}"
+    NUCLEI_RETRIES="${NUCLEI_RETRIES:-2}"
+    ;;
+esac
 NUCLEI_TIMEOUT="${NUCLEI_TIMEOUT:-10}"
 
 nuclei_base_flags(){
@@ -41,17 +51,26 @@ nuclei_base_flags(){
 # ═══════════════════════════════════════════════════════════════
 # Katana
 # ═══════════════════════════════════════════════════════════════
-if [ "$BBFLOW_PROFILE" = "deep" ]; then
-  KATANA_DEPTH="${KATANA_DEPTH:-5}"
-  KATANA_CRAWL_DURATION="${KATANA_CRAWL_DURATION:-15m}"
-  KATANA_CONCURRENCY="${KATANA_CONCURRENCY:-20}"
-  KATANA_RATE_LIMIT="${KATANA_RATE_LIMIT:-200}"
-else
-  KATANA_DEPTH="${KATANA_DEPTH:-3}"
-  KATANA_CRAWL_DURATION="${KATANA_CRAWL_DURATION:-5m}"
-  KATANA_CONCURRENCY="${KATANA_CONCURRENCY:-10}"
-  KATANA_RATE_LIMIT="${KATANA_RATE_LIMIT:-150}"
-fi
+case "$BBFLOW_PROFILE" in
+  deep)
+    KATANA_DEPTH="${KATANA_DEPTH:-5}"
+    KATANA_CRAWL_DURATION="${KATANA_CRAWL_DURATION:-15m}"
+    KATANA_CONCURRENCY="${KATANA_CONCURRENCY:-20}"
+    KATANA_RATE_LIMIT="${KATANA_RATE_LIMIT:-200}"
+    ;;
+  stealth)
+    KATANA_DEPTH="${KATANA_DEPTH:-2}"
+    KATANA_CRAWL_DURATION="${KATANA_CRAWL_DURATION:-3m}"
+    KATANA_CONCURRENCY="${KATANA_CONCURRENCY:-2}"
+    KATANA_RATE_LIMIT="${KATANA_RATE_LIMIT:-30}"
+    ;;
+  *)
+    KATANA_DEPTH="${KATANA_DEPTH:-3}"
+    KATANA_CRAWL_DURATION="${KATANA_CRAWL_DURATION:-5m}"
+    KATANA_CONCURRENCY="${KATANA_CONCURRENCY:-10}"
+    KATANA_RATE_LIMIT="${KATANA_RATE_LIMIT:-150}"
+    ;;
+esac
 
 katana_base_flags(){
   echo "-d $KATANA_DEPTH"
@@ -65,6 +84,8 @@ katana_base_flags(){
   echo "-ef css,png,jpg,gif,svg,ico,woff,ttf,eot,pdf,mp4"
   # headless for SPA — only in deep profile (Chrome/chromium needed)
   [ "$BBFLOW_PROFILE" = "deep" ] && echo "-headless"
+  # stealth: add random delay between requests
+  [ "$BBFLOW_PROFILE" = "stealth" ] && echo "-rd 1-3"
   # XHR/fetch extraction
   echo "-xhr"
   # form action extraction
@@ -74,15 +95,23 @@ katana_base_flags(){
 # ═══════════════════════════════════════════════════════════════
 # Dalfox (XSS scanner)
 # ═══════════════════════════════════════════════════════════════
-if [ "$BBFLOW_PROFILE" = "deep" ]; then
-  DALFOX_WORKERS="${DALFOX_WORKERS:-10}"
-  DALFOX_TIMEOUT="${DALFOX_TIMEOUT:-15}"
-  DALFOX_DELAY="${DALFOX_DELAY:-50}"
-else
-  DALFOX_WORKERS="${DALFOX_WORKERS:-5}"
-  DALFOX_TIMEOUT="${DALFOX_TIMEOUT:-10}"
-  DALFOX_DELAY="${DALFOX_DELAY:-100}"
-fi
+case "$BBFLOW_PROFILE" in
+  deep)
+    DALFOX_WORKERS="${DALFOX_WORKERS:-10}"
+    DALFOX_TIMEOUT="${DALFOX_TIMEOUT:-15}"
+    DALFOX_DELAY="${DALFOX_DELAY:-50}"
+    ;;
+  stealth)
+    DALFOX_WORKERS="${DALFOX_WORKERS:-2}"
+    DALFOX_TIMEOUT="${DALFOX_TIMEOUT:-20}"
+    DALFOX_DELAY="${DALFOX_DELAY:-500}"
+    ;;
+  *)
+    DALFOX_WORKERS="${DALFOX_WORKERS:-5}"
+    DALFOX_TIMEOUT="${DALFOX_TIMEOUT:-10}"
+    DALFOX_DELAY="${DALFOX_DELAY:-100}"
+    ;;
+esac
 
 dalfox_base_flags(){
   echo "--silence"
@@ -102,15 +131,23 @@ dalfox_base_flags(){
 # ═══════════════════════════════════════════════════════════════
 # ffuf (directory/param fuzzing)
 # ═══════════════════════════════════════════════════════════════
-if [ "$BBFLOW_PROFILE" = "deep" ]; then
-  FFUF_THREADS="${FFUF_THREADS:-30}"
-  FFUF_RATE="${FFUF_RATE:-25}"
-  FFUF_RECURSION="${FFUF_RECURSION:-2}"
-else
-  FFUF_THREADS="${FFUF_THREADS:-20}"
-  FFUF_RATE="${FFUF_RATE:-15}"
-  FFUF_RECURSION="${FFUF_RECURSION:-0}"
-fi
+case "$BBFLOW_PROFILE" in
+  deep)
+    FFUF_THREADS="${FFUF_THREADS:-30}"
+    FFUF_RATE="${FFUF_RATE:-25}"
+    FFUF_RECURSION="${FFUF_RECURSION:-2}"
+    ;;
+  stealth)
+    FFUF_THREADS="${FFUF_THREADS:-5}"
+    FFUF_RATE="${FFUF_RATE:-3}"
+    FFUF_RECURSION="${FFUF_RECURSION:-0}"
+    ;;
+  *)
+    FFUF_THREADS="${FFUF_THREADS:-20}"
+    FFUF_RATE="${FFUF_RATE:-15}"
+    FFUF_RECURSION="${FFUF_RECURSION:-0}"
+    ;;
+esac
 FFUF_TIMEOUT="${FFUF_TIMEOUT:-10}"
 
 ffuf_base_flags(){
@@ -149,9 +186,16 @@ waymore_base_flags(){
 httpx_base_flags(){
   echo "-silent"
   echo "-mc 200,201,204,301,302,307,401,403,405,500"
-  echo "-timeout 10"
-  echo "-retries 2"
-  echo "-threads 50"
+  if [ "$BBFLOW_PROFILE" = "stealth" ]; then
+    echo "-timeout 20"
+    echo "-retries 1"
+    echo "-threads 5"
+    echo "-delay 1-3s"
+  else
+    echo "-timeout 10"
+    echo "-retries 2"
+    echo "-threads 50"
+  fi
   # tech detection
   echo "-td"                 # technology detection
   echo "-title"              # page title
