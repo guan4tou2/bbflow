@@ -2,6 +2,9 @@
 # bbflow.sh — 統一 Bug Bounty Flow CLI  v1.7.0
 # 零 LLM 依賴。所有 subcommand 都是 bash + curl + python3 stdlib。
 #
+# v1.8.0 (2026-06-26): +4 hunters (crlf-inject, dns-deep, tls-audit, oob-interact),
+#   hunter-chains.sh auto-chaining, VPS: +tlsx/cdncheck/alterx/uncover
+#
 # v1.7.0 (2026-06-26): +2 hunters (git-dumper, url-analysis), notify util,
 #   centralized tool-profiles.sh (safe/deep) sourced by all 52 hunters,
 #   profile-aware params for nuclei/katana/dalfox/ffuf across hunters
@@ -1093,6 +1096,10 @@ EOF
   run_hunter open-redirect-chain "$TOOLS_DIR/hunters/hunt-open-redirect-chain.sh" url
   run_hunter git-dumper    "$TOOLS_DIR/hunters/hunt-git-dumper.sh"          url
   run_hunter url-analysis  "$TOOLS_DIR/hunters/hunt-url-analysis.sh"       url
+  run_hunter crlf-inject   "$TOOLS_DIR/hunters/hunt-crlf-inject.sh"       url
+  run_hunter dns-deep      "$TOOLS_DIR/hunters/hunt-dns-deep.sh"          domain
+  run_hunter tls-audit     "$TOOLS_DIR/hunters/hunt-tls-audit.sh"         host
+  run_hunter oob-interact  "$TOOLS_DIR/hunters/hunt-oob-interact.sh"      url
   # subdomain-takeover: feed individual hostnames (dig CNAME), skip live_hosts loop
   if want takeover; then
     info "hunter: takeover (per-subdomain)"
