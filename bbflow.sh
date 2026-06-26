@@ -2,6 +2,11 @@
 # bbflow.sh — 統一 Bug Bounty Flow CLI  v2.0.0
 # 零 LLM 依賴。所有 subcommand 都是 bash + curl + python3 stdlib。
 #
+# v2.1.0 (2026-06-27): +7 hunters (js-analysis, 403-bypass, waf-fingerprint,
+#   graphql-deep, screenshot, vhost-discover, subdomain-resolve), +12 tools
+#   (gowitness/nomore403/wafw00f/puredns/crlfuzz/jsluice/gobuster/feroxbuster/
+#   xnLinkFinder/clairvoyance/graphw00f/massdns). 66 hunters, 38 tools
+#
 # v2.0.0 (2026-06-27): stealth profile, `bbflow update/report/wordlists/dry-run`,
 #   report generator (HUNTERS_REPORT.md), one-click tool update, wordlist manager,
 #   hunter dry-run syntax validator. 59 hunters, 3 profiles (safe/deep/stealth)
@@ -1114,6 +1119,13 @@ EOF
   run_hunter cdn-detect    "$TOOLS_DIR/hunters/hunt-cdn-detect.sh"        host
   run_hunter search-engines "$TOOLS_DIR/hunters/hunt-search-engines.sh"  domain
   run_hunter subdomain-permute "$TOOLS_DIR/hunters/hunt-subdomain-permute.sh" domain
+  run_hunter js-analysis     "$TOOLS_DIR/hunters/hunt-js-analysis.sh"       host
+  run_hunter 403-bypass      "$TOOLS_DIR/hunters/hunt-403-bypass.sh"        url
+  run_hunter waf-fingerprint "$TOOLS_DIR/hunters/hunt-waf-fingerprint.sh"   host
+  run_hunter graphql-deep    "$TOOLS_DIR/hunters/hunt-graphql-deep.sh"      host
+  run_hunter screenshot      "$TOOLS_DIR/hunters/hunt-screenshot.sh"        host
+  run_hunter vhost-discover  "$TOOLS_DIR/hunters/hunt-vhost-discover.sh"    host
+  run_hunter subdomain-resolve "$TOOLS_DIR/hunters/hunt-subdomain-resolve.sh" domain
   # subdomain-takeover: feed individual hostnames (dig CNAME), skip live_hosts loop
   if want takeover; then
     info "hunter: takeover (per-subdomain)"
@@ -1853,6 +1865,12 @@ cmd_update() {
   _upgrade_go uncover    "github.com/projectdiscovery/uncover/cmd/uncover@latest"
   _upgrade_go notify     "github.com/projectdiscovery/notify/cmd/notify@latest"
   _upgrade_go interactsh-client "github.com/projectdiscovery/interactsh/cmd/interactsh-client@latest"
+  _upgrade_go gowitness  "github.com/sensepost/gowitness@latest"
+  _upgrade_go nomore403  "github.com/devploit/nomore403@latest"
+  _upgrade_go puredns    "github.com/d3mondev/puredns/v2@latest"
+  _upgrade_go crlfuzz    "github.com/dwisiswant0/crlfuzz/cmd/crlfuzz@latest"
+  _upgrade_go jsluice    "github.com/BishopFox/jsluice/cmd/jsluice@latest"
+  _upgrade_go gobuster   "github.com/OJ/gobuster/v3@latest"
 
   echo ""
   echo "${B}Python tools:${N}"
@@ -1861,6 +1879,9 @@ cmd_update() {
   _upgrade_uv paramspider "paramspider"
   _upgrade_uv git-dumper "git-dumper"
   _upgrade_uv s3scanner  "s3scanner"
+  _upgrade_uv wafw00f    "wafw00f"
+  _upgrade_uv xnLinkFinder "xnLinkFinder"
+  _upgrade_uv clairvoyance "clairvoyance"
 
   echo ""
   echo "${B}Summary: ${ok_count} updated, ${fail_count} failed, ${skip_count} skipped (${total} total)${N}"
@@ -2226,6 +2247,29 @@ cmd_tools() {
   _chk s3scanner  "uv tool install s3scanner"
   _chk interactsh-client "go install github.com/projectdiscovery/interactsh/cmd/interactsh-client@latest"
   _chk notify     "go install github.com/projectdiscovery/notify/cmd/notify@latest"
+  echo ""
+  echo "${B}Content Discovery:${N}"
+  _chk feroxbuster "brew install feroxbuster"
+  _chk gobuster   "go install github.com/OJ/gobuster/v3@latest"
+  echo ""
+  echo "${B}JS Analysis:${N}"
+  _chk jsluice    "go install github.com/BishopFox/jsluice/cmd/jsluice@latest"
+  _chk xnLinkFinder "uv tool install xnLinkFinder"
+  echo ""
+  echo "${B}WAF & Bypass:${N}"
+  _chk wafw00f    "uv tool install wafw00f"
+  _chk nomore403  "go install github.com/devploit/nomore403@latest"
+  _chk crlfuzz    "go install github.com/dwisiswant0/crlfuzz/cmd/crlfuzz@latest"
+  echo ""
+  echo "${B}DNS & Resolution:${N}"
+  _chk puredns    "go install github.com/d3mondev/puredns/v2@latest"
+  _chk massdns    "brew install massdns"
+  echo ""
+  echo "${B}GraphQL:${N}"
+  _chk clairvoyance "uv tool install clairvoyance"
+  echo ""
+  echo "${B}Visual Recon:${N}"
+  _chk gowitness  "go install github.com/sensepost/gowitness@latest"
   echo ""
   echo "${B}Summary: $found/$total tools available${N}"
   echo "Profile: ${BBFLOW_PROFILE:-safe} | Hunters: $(ls "$TOOLS_DIR/hunters"/*.sh 2>/dev/null | wc -l | tr -d ' ') | Templates: $(ls "$TOOLS_DIR/templates/kb-custom"/*.yaml 2>/dev/null | wc -l | tr -d ' ')"
