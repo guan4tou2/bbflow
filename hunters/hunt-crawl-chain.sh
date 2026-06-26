@@ -32,6 +32,9 @@ mkdir -p "$OUT_DIR"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TOOLS_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
+# 載入集中化工具配置
+[ -f "$TOOLS_DIR/configs/tool-profiles.sh" ] && source "$TOOLS_DIR/configs/tool-profiles.sh"
+
 # 工具定位
 NUCLEI="$TOOLS_DIR/nuclei"
 [ ! -x "$NUCLEI" ] && NUCLEI="$(command -v nuclei 2>/dev/null || echo '')"
@@ -65,13 +68,15 @@ log "=== crawl-chain: $TARGET (depth=$DEPTH, fast=$FAST) ==="
 if [ -n "$KATANA" ]; then
   log "[1/10] katana crawl (depth=$DEPTH, headless js-crawl)..."
   "$KATANA" -u "$TARGET" \
-    -d "$DEPTH" \
+    -d "${KATANA_DEPTH:-$DEPTH}" \
     -jc -js-crawl \
     -kf all \
     -aff \
-    -ct 8m \
-    -c 10 \
-    -rl 150 \
+    -ct "${KATANA_CRAWL_DURATION:-8m}" \
+    -c "${KATANA_CONCURRENCY:-10}" \
+    -rl "${KATANA_RATE_LIMIT:-150}" \
+    -ef css,png,jpg,gif,svg,ico,woff,ttf,eot,pdf,mp4 \
+    -xhr \
     -silent \
     -o "$OUT_DIR/katana.txt" 2>/dev/null || true
   K=$(wc -l < "$OUT_DIR/katana.txt" 2>/dev/null | tr -d ' ')
@@ -228,8 +233,11 @@ if [ -n "$NUCLEI" ] && [ -d "$NUCLEI_DAST" ]; then
       -t "$DAST_SUB" \
       -dast \
       -severity low,medium,high,critical \
-      -rate-limit 5 \
-      -timeout 10 \
+      -rate-limit "${NUCLEI_RATE_LIMIT:-5}" \
+      -bulk-size "${NUCLEI_BULK_SIZE:-25}" \
+      -c "${NUCLEI_CONCURRENCY:-10}" \
+      -retries "${NUCLEI_RETRIES:-2}" \
+      -timeout "${NUCLEI_TIMEOUT:-10}" \
       -silent \
       -o "$OUT_DIR/dast_${PATTERN}.txt" 2>/dev/null || true
     [ -s "$OUT_DIR/dast_${PATTERN}.txt" ] && \

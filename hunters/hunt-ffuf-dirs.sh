@@ -12,6 +12,10 @@
 #   OUT_DIR=/path FFUF_COOKIE="session=xxx" hunt-ffuf-dirs.sh <url>
 
 set -uo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/../configs/tool-profiles.sh" 2>/dev/null || true
+
 TARGET="${1:-}"
 [ -z "$TARGET" ] && { echo "usage: $0 <url>"; exit 1; }
 OUT_DIR="${OUT_DIR:-/tmp/bb-ffuf-$$}"
@@ -142,11 +146,15 @@ BASELINE_SIZE=$(curl -s -o /dev/null -w "%{size_download}" \
 BASE_FLAGS=(
   "-mc" "200,201,204,301,302,307,401,403,405"
   "-fc" "404,429,503"
-  "-t" "20"
-  "-timeout" "10"
-  "-rate" "15"
+  "-t" "${FFUF_THREADS:-20}"
+  "-timeout" "${FFUF_TIMEOUT:-10}"
+  "-rate" "${FFUF_RATE:-15}"
+  "-ic"
   "-s"
 )
+# deep profile: recursive directory discovery
+FFUF_REC="${FFUF_RECURSION:-0}"
+[ "$FFUF_REC" -gt 0 ] 2>/dev/null && BASE_FLAGS+=("-recursion" "-recursion-depth" "$FFUF_REC")
 
 # Filter by 404 size if non-zero
 [ "${BASELINE_SIZE:-0}" -gt 100 ] && BASE_FLAGS+=("-fs" "$BASELINE_SIZE")

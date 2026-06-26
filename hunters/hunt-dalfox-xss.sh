@@ -101,6 +101,7 @@ XSS_COUNT=$(wc -l < "$XSS_URLS" | tr -d ' ')
 [ "$XSS_COUNT" -eq 0 ] && exit 0
 
 # ── kxss pre-filter (reflection check before heavy dalfox scan) ────
+KXSS_PREFILTERED=""
 if [ -n "$KXSS" ]; then
   REFLECTED="$OUT_DIR/kxss_reflected.txt"
   cat "$XSS_URLS" | "$KXSS" 2>/dev/null | grep -oP 'url="[^"]*"' | sed 's/url="//;s/"$//' | sort -u > "$REFLECTED" || true
@@ -108,6 +109,7 @@ if [ -n "$KXSS" ]; then
     REFLECTED_COUNT=$(wc -l < "$REFLECTED" | tr -d ' ')
     echo "[kxss] $REFLECTED_COUNT/$XSS_COUNT URLs have reflected params — focusing dalfox on these"
     cp "$REFLECTED" "$XSS_URLS"
+    KXSS_PREFILTERED=1
   fi
 fi
 
@@ -116,11 +118,15 @@ DALFOX_FLAGS=(
   "--silence"
   "--no-color"
   "--output" "$OUT_DIR/dalfox_raw.txt"
-  "--worker" "5"
-  "--timeout" "10"
-  "--delay" "100"
+  "--worker" "${DALFOX_WORKERS:-5}"
+  "--timeout" "${DALFOX_TIMEOUT:-10}"
+  "--delay" "${DALFOX_DELAY:-100}"
   "--follow-redirects"
+  "--deep-domxss"
+  "--mining-dict"
 )
+# kxss confirmed reflection → skip basic alerting vector (saves time)
+[ -n "$KXSS_PREFILTERED" ] && DALFOX_FLAGS+=("--skip-bav")
 
 # Blind XSS callback
 [ -n "$BLIND_URL" ] && DALFOX_FLAGS+=("--blind" "$BLIND_URL")
