@@ -1,0 +1,18 @@
+# notify provider config for bbflow
+# Copy to ~/.config/notify/provider-config.yaml and fill in tokens
+# Docs: https://github.com/projectdiscovery/notify
+
+telegram:
+  - id: "bbflow"
+    telegram_api_key: "${TELEGRAM_BOT_TOKEN}"
+    telegram_chat_id: "${TELEGRAM_CHAT_ID}"
+    telegram_format: "{{data}}"
+    telegram_parsemode: "Markdown"
+
+# Optional: Discord webhook
+# discord:
+#   - id: "bbflow-discord"
+#     discord_channel: "bbflow"
+#     discord_username: "bbflow"
+#     discord_format: "{{data}}"
+#     discord_webhook_url: "${DISCORD_WEBHOOK_URL}"

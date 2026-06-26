@@ -9,6 +9,9 @@
 # 命中條件：resp_status=成功 / 回應非 3xx / HTTP 200 且 body 含成功指標
 set -uo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/../configs/tool-profiles.sh" 2>/dev/null || true
+
 HOST="${1:-}"
 [ -z "$HOST" ] && { echo "Usage: $0 <https://host>"; exit 1; }
 HOST="${HOST%/}"

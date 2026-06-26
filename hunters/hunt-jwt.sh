@@ -15,6 +15,9 @@
 #   ./hunt-jwt.sh <JWT_TOKEN> --endpoint https://api.target.com/me   # 測 alg:none 會不會被接受
 set -uo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/../configs/tool-profiles.sh" 2>/dev/null || true
+
 TOKEN="${1:-}"
 [ -z "$TOKEN" ] && { echo "Usage: $0 <JWT_TOKEN> [--endpoint <url>]"; exit 1; }
 shift || true

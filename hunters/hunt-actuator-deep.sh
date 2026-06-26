@@ -18,6 +18,9 @@
 #   ./hunt-actuator-deep.sh https://target --heapdump     # 下載 heapdump (可能很大)
 set -uo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/../configs/tool-profiles.sh" 2>/dev/null || true
+
 HOST="${1:-}"
 [ -z "$HOST" ] && { echo "Usage: $0 <https://host> [--heapdump]"; exit 1; }
 HOST="${HOST%/}"

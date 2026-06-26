@@ -19,13 +19,14 @@
 
 set -uo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+TOOLS_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+source "$SCRIPT_DIR/../configs/tool-profiles.sh" 2>/dev/null || true
+
 TARGET="${1:-}"
 [ -z "$TARGET" ] && { echo "usage: $0 <url>"; exit 1; }
 OUT_DIR="${OUT_DIR:-/tmp/bb-param-fuzz-$$}"
 mkdir -p "$OUT_DIR"
-
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-TOOLS_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 NUCLEI="$TOOLS_DIR/nuclei"
 [ ! -x "$NUCLEI" ] && NUCLEI="$(command -v nuclei 2>/dev/null || echo '')"
@@ -46,12 +47,16 @@ ALL_URLS="$OUT_DIR/all_urls.txt"
 # ── Step 1: katana crawl（JS-aware, headless mode for SPAs）─────
 if [ -n "$KATANA" ]; then
   $KATANA -u "$TARGET" \
-    -d 3 \
+    -d "${KATANA_DEPTH:-3}" \
     -jc \
     -js-crawl \
     -kf all \
     -aff \
-    -ct 8m \
+    -xhr \
+    -ef css,png,jpg,gif,svg,ico,woff,ttf,eot,pdf,mp4 \
+    -ct "${KATANA_CRAWL_DURATION:-8m}" \
+    -c "${KATANA_CONCURRENCY:-10}" \
+    -rl "${KATANA_RATE_LIMIT:-150}" \
     -silent \
     -o "$OUT_DIR/katana.txt" 2>/dev/null || true
   [ -s "$OUT_DIR/katana.txt" ] && cat "$OUT_DIR/katana.txt" >> "$ALL_URLS"
@@ -131,7 +136,13 @@ run_dast() {
   local URLS="$1"; local TEMPLATES="$2"
   [ -s "$URLS" ] || return
   "$NUCLEI" -l "$URLS" $TEMPLATES \
-    -dast -rate-limit 8 -timeout 15 -silent \
+    -dast \
+    -rate-limit "${NUCLEI_RATE_LIMIT:-8}" \
+    -bulk-size "${NUCLEI_BULK_SIZE:-25}" \
+    -c "${NUCLEI_CONCURRENCY:-10}" \
+    -retries "${NUCLEI_RETRIES:-2}" \
+    -timeout "${NUCLEI_TIMEOUT:-15}" \
+    -silent \
     -o "$FUZZ_OUT" 2>/dev/null || true
 }
 

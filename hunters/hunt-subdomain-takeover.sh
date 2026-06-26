@@ -19,6 +19,9 @@
 #   ./hunt-subdomain-takeover.sh -f subdomains.txt          # 批次
 set -uo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/../configs/tool-profiles.sh" 2>/dev/null || true
+
 SUB="${1:-}"
 [ -z "$SUB" ] && { echo "Usage: $0 <subdomain> | -f <file>"; exit 1; }
 

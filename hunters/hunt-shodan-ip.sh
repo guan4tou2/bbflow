@@ -15,6 +15,9 @@
 
 set -uo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/../configs/tool-profiles.sh" 2>/dev/null || true
+
 INPUT="${1:-}"
 [ -z "$INPUT" ] && { echo "Usage: $0 <host-url>"; exit 1; }
 HOST=$(echo "$INPUT" | sed -E 's|^https?://||' | cut -d/ -f1 | cut -d: -f1)

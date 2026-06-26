@@ -18,8 +18,12 @@
 #
 # 用法：
 #   ./hunt-cors-reflect.sh https://cloudaccess.svc.example.com/devices
+
 #   cat bbot/live_hosts.txt | while read h; do ./hunt-cors-reflect.sh "$h/"; done
 set -uo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/../configs/tool-profiles.sh" 2>/dev/null || true
 
 URL="${1:-}"
 [ -z "$URL" ] && { echo "Usage: $0 <full-url>"; exit 1; }

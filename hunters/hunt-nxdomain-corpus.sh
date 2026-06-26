@@ -22,6 +22,9 @@
 #   ./hunt-nxdomain-corpus.sh target.com -f extra.txt
 set -uo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/../configs/tool-profiles.sh" 2>/dev/null || true
+
 TARGET="${1:-}"
 [ -z "$TARGET" ] && { echo "Usage: $0 <target.com> [-d] [-f extra-file]"; exit 1; }
 shift || true

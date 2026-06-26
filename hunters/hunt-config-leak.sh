@@ -13,6 +13,9 @@
 #   FAST=1 ./hunt-config-leak.sh https://target   # 只跑 P1/P2 高信心路徑（24 個）
 set -uo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/../configs/tool-profiles.sh" 2>/dev/null || true
+
 HOST="${1:-}"
 [ -z "$HOST" ] && { echo "Usage: $0 <https://host>"; exit 1; }
 HOST="${HOST%/}"

@@ -13,6 +13,9 @@
 #   ./hunt-backup-files.sh https://target extra_name1 extra_name2   # 附加候選
 set -uo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/../configs/tool-profiles.sh" 2>/dev/null || true
+
 HOST="${1:-}"
 [ -z "$HOST" ] && { echo "Usage: $0 <https://host> [extra_name...]"; exit 1; }
 HOST="${HOST%/}"

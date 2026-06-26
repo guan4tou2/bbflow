@@ -14,13 +14,15 @@
 #   OUT_DIR=/path DALFOX_COOKIE="session=xxx" hunt-dalfox-xss.sh <url>
 
 set -uo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+TOOLS_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+source "$SCRIPT_DIR/../configs/tool-profiles.sh" 2>/dev/null || true
+
 TARGET="${1:-}"
 [ -z "$TARGET" ] && { echo "usage: $0 <url>"; exit 1; }
 OUT_DIR="${OUT_DIR:-/tmp/bb-dalfox-$$}"
 mkdir -p "$OUT_DIR"
-
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-TOOLS_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 DALFOX="$(command -v dalfox 2>/dev/null || echo '')"
 KATANA="$(command -v katana 2>/dev/null || echo '')"

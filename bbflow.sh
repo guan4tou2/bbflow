@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
-# bbflow.sh — 統一 Bug Bounty Flow CLI  v1.6.0
+# bbflow.sh — 統一 Bug Bounty Flow CLI  v1.7.0
 # 零 LLM 依賴。所有 subcommand 都是 bash + curl + python3 stdlib。
+#
+# v1.7.0 (2026-06-26): +2 hunters (git-dumper, url-analysis), notify util,
+#   centralized tool-profiles.sh (safe/deep) sourced by all 52 hunters,
+#   profile-aware params for nuclei/katana/dalfox/ffuf across hunters
 #
 # v1.6.0 (2026-06-26): +3 hunters (cache-deception, postmessage, open-redirect-chain)
 #   + kxss pre-filter for dalfox, s3scanner deep check for cloud-bucket
@@ -1087,6 +1091,8 @@ EOF
   run_hunter cache-deception "$TOOLS_DIR/hunters/hunt-cache-deception.sh"  url
   run_hunter postmessage   "$TOOLS_DIR/hunters/hunt-postmessage.sh"        url
   run_hunter open-redirect-chain "$TOOLS_DIR/hunters/hunt-open-redirect-chain.sh" url
+  run_hunter git-dumper    "$TOOLS_DIR/hunters/hunt-git-dumper.sh"          url
+  run_hunter url-analysis  "$TOOLS_DIR/hunters/hunt-url-analysis.sh"       url
   # subdomain-takeover: feed individual hostnames (dig CNAME), skip live_hosts loop
   if want takeover; then
     info "hunter: takeover (per-subdomain)"

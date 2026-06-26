@@ -19,6 +19,9 @@
 #   # 然後彙整：grep -h "VULN" mail2000_out/*.txt
 set -uo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/../configs/tool-profiles.sh" 2>/dev/null || true
+
 URL="${1:-}"
 [ -z "$URL" ] && { echo "Usage: $0 <https://host> | for H in \$(cat hosts.txt); do $0 \"\$H\"; done"; exit 1; }
 URL="${URL%/}"

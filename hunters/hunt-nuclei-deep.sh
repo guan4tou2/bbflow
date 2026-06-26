@@ -31,12 +31,15 @@
 
 set -u
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/../configs/tool-profiles.sh" 2>/dev/null || true
+
 TARGET="${1:-}"
 OUTDIR="${OUTDIR:-./nuclei_deep_out}"
 CATEGORY="${CATEGORY:-all}"
 FAST="${FAST:-0}"
-RATE="${RATE:-50}"
-CONC="${CONC:-25}"
+RATE="${RATE:-${NUCLEI_RATE_LIMIT:-50}}"
+CONC="${CONC:-${NUCLEI_CONCURRENCY:-25}}"
 DAST="${DAST:-0}"
 OAST="${OAST:-0}"
 BB_RECON="${BB_RECON:-$(dirname "$0")/../nuclei-templates/bb-recon}"

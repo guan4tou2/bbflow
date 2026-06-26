@@ -13,6 +13,10 @@
 #   OUT_DIR=/path ARJUN_HEADERS="Authorization: Bearer xxx" hunt-arjun-params.sh <url>
 
 set -uo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/../configs/tool-profiles.sh" 2>/dev/null || true
+
 TARGET="${1:-}"
 [ -z "$TARGET" ] && { echo "usage: $0 <url>"; exit 1; }
 OUT_DIR="${OUT_DIR:-/tmp/bb-arjun-$$}"

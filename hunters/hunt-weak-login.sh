@@ -19,6 +19,9 @@
 #   SAFE=1 ./hunt-weak-login.sh https://target    # 只跑 "一次 request 即可判斷" 的 vendors
 set -uo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/../configs/tool-profiles.sh" 2>/dev/null || true
+
 HOST="${1:-}"
 [ -z "$HOST" ] && { echo "Usage: $0 <https://host>"; exit 1; }
 HOST="${HOST%/}"

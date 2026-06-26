@@ -8,6 +8,9 @@
 # 測試向量：空帳密、admin/PASSWORD、admin/admin、admin/空白、root/root
 set -uo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/../configs/tool-profiles.sh" 2>/dev/null || true
+
 HOST="${1:-}"
 [ -z "$HOST" ] && { echo "Usage: $0 <https://host>"; exit 1; }
 HOST="${HOST%/}"

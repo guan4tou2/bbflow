@@ -21,6 +21,9 @@
 
 set -u
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/../configs/tool-profiles.sh" 2>/dev/null || true
+
 TARGET="${1:-}"
 OUTDIR="${OUTDIR:-./waf_bypass_out}"
 PATHS="${PATHS:-/admin,/administrator,/login,/api,/api/users,/.env,/actuator,/actuator/env,/manager/html,/config}"

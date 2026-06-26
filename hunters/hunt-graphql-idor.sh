@@ -14,6 +14,9 @@
 #   ./hunt-graphql-idor.sh https://api.example.com /graphql
 set -uo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/../configs/tool-profiles.sh" 2>/dev/null || true
+
 HOST="${1:-}"
 PATH_="${2:-}"
 [ -z "$HOST" ] && { echo "Usage: $0 <https://host> [/path]"; exit 1; }

@@ -24,6 +24,9 @@
 # Output: ssrf_oracle_out/<slug>.txt — 5 個 baseline 回應對照表 + oracle 等級結論
 set -uo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/../configs/tool-profiles.sh" 2>/dev/null || true
+
 URL="${1:-}"
 [ -z "$URL" ] && { cat <<USAGE
 Usage: $0 <full-url>

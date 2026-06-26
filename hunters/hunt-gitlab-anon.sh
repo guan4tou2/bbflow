@@ -23,6 +23,9 @@
 #   ./hunt-gitlab-anon.sh https://gitlab.example.com
 set -uo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/../configs/tool-profiles.sh" 2>/dev/null || true
+
 URL="${1:-}"
 [ -z "$URL" ] && { echo "Usage: $0 <https://gitlab-instance>"; exit 1; }
 URL="${URL%/}"

@@ -19,6 +19,9 @@
 #   cat bbot/live_hosts.txt | while read h; do ./hunt-cert-bypass.sh "$h"; done
 set -uo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/../configs/tool-profiles.sh" 2>/dev/null || true
+
 HOST="${1:-}"
 [ -z "$HOST" ] && { echo "Usage: $0 <https://host>"; exit 1; }
 HOST="${HOST%/}"

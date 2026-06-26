@@ -10,6 +10,9 @@
 
 set -uo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/../configs/tool-profiles.sh" 2>/dev/null || true
+
 DOMAIN="${1:-}"
 [ -z "$DOMAIN" ] && { echo "Usage: $0 <domain> [known_subs_file]"; exit 1; }
 # 允許傳入 https://www.example.com 格式

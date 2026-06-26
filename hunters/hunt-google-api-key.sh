@@ -20,6 +20,9 @@
 #   Firebase Cloud Messaging、Identity Toolkit (auth)
 set -uo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/../configs/tool-profiles.sh" 2>/dev/null || true
+
 KEY="${1:-}"
 [ -z "$KEY" ] && { echo "Usage: $0 <AIzaSy...>"; exit 1; }
 [[ ! "$KEY" =~ ^AIza ]] && { echo "not an AIza* key"; exit 1; }
