@@ -105,7 +105,7 @@ if [ -n "$JSLUICE" ]; then
       -o "$local_file" "$js_url" 2>/dev/null
     [ -s "$local_file" ] || continue
     "$JSLUICE" urls "$local_file" 2>/dev/null \
-      | grep -oP '"url"\s*:\s*"\K[^"]+' \
+      | grep -o '"url":"[^"]*"' | sed 's/"url":"//;s/"$//' \
       >> "$ALL_ENDPOINTS"
     (( processed++ )) || true
   done < "$JS_LIST"

@@ -109,7 +109,7 @@ for url in "${CANDIDATES[@]}"; do
 
   # Parse lines that show a status code (nomore403 format: "200 ... <technique>")
   while IFS= read -r line; do
-    code=$(echo "$line" | grep -oP '^\d{3}' || true)
+    code=$(echo "$line" | grep -oE '^[0-9]{3}' || true)
     case "$code" in
       200)
         hit "BYPASS 200 — $url — $line"

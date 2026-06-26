@@ -46,7 +46,7 @@ grab_titles_curl() {
   while IFS= read -r url; do
     [[ -z "$url" ]] && continue
     title=$(curl -sk --max-time "$TIMEOUT" -L "$url" \
-      | grep -oiP '(?<=<title>)[^<]+' | head -1 | xargs 2>/dev/null || echo "(no title)")
+      | grep -oi '<title>[^<]*' | sed 's/<title>//i' | head -1 | xargs 2>/dev/null || echo "(no title)")
     echo "$url  |  $title" | tee -a "$title_out"
   done < "$input_file"
   echo "[curl-fallback] titles saved → $title_out"
@@ -60,9 +60,9 @@ if [[ -n "$TARGET" ]]; then
     "$GOWITNESS_BIN" scan single \
       --url "$TARGET" \
       --screenshot-path "$SCREENSHOT_DIR" \
-      --db-uri "sqlite://$DB_FILE" \
-      --timeout "$TIMEOUT" \
-      --chrome-flags "$CHROME_FLAGS" 2>&1
+      --write-db \
+      --write-db-uri "sqlite://$DB_FILE" \
+      --delay "$TIMEOUT" 2>&1
   else
     echo "$TARGET" > "$OUT_DIR/_single.txt"
     grab_titles_curl "$OUT_DIR/_single.txt"
@@ -83,9 +83,9 @@ else
     "$GOWITNESS_BIN" scan file \
       --input-file "$HOSTS_FILE" \
       --screenshot-path "$SCREENSHOT_DIR" \
-      --db-uri "sqlite://$DB_FILE" \
-      --timeout "$TIMEOUT" \
-      --chrome-flags "$CHROME_FLAGS" \
+      --write-db \
+      --write-db-uri "sqlite://$DB_FILE" \
+      --delay "$TIMEOUT" \
       --threads 3 2>&1
   else
     grab_titles_curl "$HOSTS_FILE"

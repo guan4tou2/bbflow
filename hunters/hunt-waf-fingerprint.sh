@@ -99,9 +99,9 @@ scan_host() {
     local waf_raw
     waf_raw=$(wafw00f -a "$url" 2>/dev/null || true)
     echo "$waf_raw" | tee -a "$out_file"
-    waf_vendor=$(echo "$waf_raw" | grep -oiP "(?<=is behind )[^\n]+" | head -1 || true)
+    waf_vendor=$(echo "$waf_raw" | grep -i "is behind" | sed 's/.*is behind //' | head -1 || true)
     [ -z "$waf_vendor" ] && waf_vendor=$(echo "$waf_raw" | grep -i "detected" \
-      | grep -v "No WAF" | grep -oiP "(?<=: ).*" | head -1 || true)
+      | grep -v "No WAF" | sed 's/.*: //' | head -1 || true)
   else
     echo "   [SKIP] wafw00f not installed" | tee -a "$out_file"
   fi
@@ -110,7 +110,7 @@ scan_host() {
   section "cdncheck" | tee -a "$out_file"
   if [ "$HAS_CDNCHECK" -eq 1 ]; then
     local cdn_raw
-    cdn_raw=$(echo "$host" | cdncheck -silent -resp -json 2>/dev/null || true)
+    cdn_raw=$(echo "$host" | cdncheck -silent -resp -jsonl 2>/dev/null || true)
     [ -n "$cdn_raw" ] && echo "$cdn_raw" | tee -a "$out_file" || \
       echo "   cdncheck returned no output" | tee -a "$out_file"
     cdncheck_waf=$(echo "$cdn_raw" | grep -o '"waf":[^,}]*' | grep -oE '"[^"]+"$' | tr -d '"' || true)
@@ -167,7 +167,8 @@ else
   echo "╠══════════════════════════════════════════════════════════════╣"
   [ -f "$SUMMARY" ] && while IFS= read -r sline; do
     h=$(echo "$sline" | awk -F' | ' '{print $1}' | cut -c1-38)
-    w=$(echo "$sline" | grep -oP '(?<=WAF: )[^|]+' | head -1 || echo "none")
+    w=$(echo "$sline" | sed -n 's/.*WAF: \([^|]*\).*/\1/p' | head -1)
+      [ -z "$w" ] && w="none"
     printf "║  %-38s │ %-19s ║\n" "$h" "${w:0:19}"
   done < "$SUMMARY"
   echo "╚══════════════════════════════════════════════════════════════╝"
