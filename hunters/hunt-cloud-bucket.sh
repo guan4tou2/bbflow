@@ -153,4 +153,25 @@ for name in "${CANDIDATES[@]}"; do
   sleep 0.3
 done
 
+# ── s3scanner deep check (if available) ────────────────────────────
+S3SCANNER="$(command -v s3scanner 2>/dev/null || echo '')"
+if [ -n "$S3SCANNER" ]; then
+  log "--- s3scanner deep check (AWS + GCP) ---"
+  BUCKET_FILE="$OUT_DIR/${SLUG}_buckets.txt"
+  printf '%s\n' "${CANDIDATES[@]}" > "$BUCKET_FILE"
+  for provider in aws gcp; do
+    S3_OUT="$OUT_DIR/${SLUG}_s3scanner_${provider}.json"
+    "$S3SCANNER" -bucket-file "$BUCKET_FILE" -provider "$provider" -enumerate -json \
+      > "$S3_OUT" 2>/dev/null || true
+    if [ -s "$S3_OUT" ]; then
+      while IFS= read -r line; do
+        perm=$(echo "$line" | grep -oP '"bucket_permissions":\s*"[^"]*"' | head -1 || true)
+        bname=$(echo "$line" | grep -oP '"bucket":\s*"[^"]*"' | head -1 || true)
+        echo "$perm" | grep -qiE 'AuthUsers|AllUsers' && \
+          warn "[HIGH] s3scanner ($provider) $bname — $perm"
+      done < "$S3_OUT"
+    fi
+  done
+fi
+
 log "=== done: bucket sweep complete ==="

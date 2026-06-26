@@ -27,6 +27,7 @@ KATANA="$(command -v katana 2>/dev/null || echo '')"
 GAU="$(command -v gau 2>/dev/null || echo '')"
 GF="$(command -v gf 2>/dev/null || echo '')"
 URO="$(command -v uro 2>/dev/null || echo '')"
+KXSS="$(command -v kxss 2>/dev/null || echo '')"
 
 [ -z "$DALFOX" ] && { echo "✗ dalfox not found (brew install dalfox)"; exit 0; }
 
@@ -90,6 +91,17 @@ fi
 
 XSS_COUNT=$(wc -l < "$XSS_URLS" | tr -d ' ')
 [ "$XSS_COUNT" -eq 0 ] && exit 0
+
+# ── kxss pre-filter (reflection check before heavy dalfox scan) ────
+if [ -n "$KXSS" ]; then
+  REFLECTED="$OUT_DIR/kxss_reflected.txt"
+  cat "$XSS_URLS" | "$KXSS" 2>/dev/null | grep -oP 'url="[^"]*"' | sed 's/url="//;s/"$//' | sort -u > "$REFLECTED" || true
+  if [ -s "$REFLECTED" ]; then
+    REFLECTED_COUNT=$(wc -l < "$REFLECTED" | tr -d ' ')
+    echo "[kxss] $REFLECTED_COUNT/$XSS_COUNT URLs have reflected params — focusing dalfox on these"
+    cp "$REFLECTED" "$XSS_URLS"
+  fi
+fi
 
 # ── build dalfox flags ─────────────────────────────────────
 DALFOX_FLAGS=(

@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
-# bbflow.sh — 統一 Bug Bounty Flow CLI  v1.5.0
+# bbflow.sh — 統一 Bug Bounty Flow CLI  v1.6.0
 # 零 LLM 依賴。所有 subcommand 都是 bash + curl + python3 stdlib。
+#
+# v1.6.0 (2026-06-26): +3 hunters (cache-deception, postmessage, open-redirect-chain)
+#   + kxss pre-filter for dalfox, s3scanner deep check for cloud-bucket
+#   + 12 KB-generated nuclei templates (catch-all-aware) in templates/kb-custom/
+#   + nuclei-kb hunter section
 #
 # v1.5.0 (2026-04-30): workshop/ path fix + 3 new hunters + init delegates to init_target.sh
 #   - research/ → workshop/ (全域路徑修正，配合 workspace rename)
@@ -48,6 +53,7 @@ HTTPX="$TOOLS_DIR/httpx";      [ ! -x "$HTTPX" ]     && HTTPX="$(command -v http
 SUBFINDER="$TOOLS_DIR/subfinder"; [ ! -x "$SUBFINDER" ] && SUBFINDER="$(command -v subfinder 2>/dev/null || echo '')"
 NUCLEI="$TOOLS_DIR/nuclei";    [ ! -x "$NUCLEI" ]    && NUCLEI="$(command -v nuclei 2>/dev/null || echo '')"
 NUCLEI_TEMPLATES="$TOOLS_DIR/nuclei-templates/bb-recon"
+NUCLEI_KB_CUSTOM="$TOOLS_DIR/templates/kb-custom"
 NUCLEI_COMMUNITY="${NUCLEI_COMMUNITY:-$HOME/nuclei-templates}"
 NUCLEI_WORDFENCE="$TOOLS_DIR/nuclei-templates/nuclei-wordfence-cve"
 export NUCLEI_COMMUNITY
@@ -1078,6 +1084,9 @@ EOF
   run_hunter git-deep      "$TOOLS_DIR/hunters/hunt-git-deep.sh"             host
   run_hunter swagger       "$TOOLS_DIR/hunters/hunt-swagger.sh"              host
   run_hunter shodan-ip     "$TOOLS_DIR/hunters/hunt-shodan-ip.sh"            host
+  run_hunter cache-deception "$TOOLS_DIR/hunters/hunt-cache-deception.sh"  url
+  run_hunter postmessage   "$TOOLS_DIR/hunters/hunt-postmessage.sh"        url
+  run_hunter open-redirect-chain "$TOOLS_DIR/hunters/hunt-open-redirect-chain.sh" url
   # subdomain-takeover: feed individual hostnames (dig CNAME), skip live_hosts loop
   if want takeover; then
     info "hunter: takeover (per-subdomain)"
@@ -1307,6 +1316,44 @@ EOF
         ok "  nuclei-panels hits: $NP_COUNT"
       else
         echo "- (no panel findings)" >> "$REPORT"
+      fi
+    fi
+  fi
+
+  # ── nuclei-kb: KB-generated custom templates (catch-all-aware) ──
+  if want nuclei-kb; then
+    if [ -z "$NUCLEI" ]; then
+      warn "nuclei not found, skipping nuclei-kb"
+    elif [ ! -d "$NUCLEI_KB_CUSTOM" ]; then
+      warn "nuclei-kb-custom not found at $NUCLEI_KB_CUSTOM, skipping"
+    else
+      info "hunter: nuclei-kb (12 KB catch-all-aware templates)"
+      local NK_OH="$DIR/hunters/nuclei-kb"
+      mkdir -p "$NK_OH"
+      local NK_OUT="$NK_OH/kb_results.txt"
+      > "$NK_OUT"
+      $NUCLEI -l "$LIVE" \
+        -t "$NUCLEI_KB_CUSTOM" \
+        -rate-limit 5 \
+        -timeout 10 \
+        -silent \
+        -o "$NK_OUT" 2>/dev/null || true
+      echo "" >> "$REPORT"
+      echo "## nuclei-kb (KB custom templates)" >> "$REPORT"
+      if [ -s "$NK_OUT" ]; then
+        local NK_COUNT
+        NK_COUNT=$(wc -l < "$NK_OUT" | tr -d ' ')
+        echo "- $NK_COUNT findings → $NK_OUT" >> "$REPORT"
+        while IFS= read -r line; do
+          local sev tmpl url
+          sev=$(echo "$line" | grep -oE '\[(critical|high|medium|info|low)\]' | head -1 | tr -d '[]')
+          tmpl=$(echo "$line" | grep -oE '^\[[^]]+\]' | head -1 | tr -d '[]')
+          url=$(echo "$line" | awk '{print $NF}')
+          echo "- 🔴 KB [$sev] $tmpl → $url" >> "$REPORT"
+        done < "$NK_OUT"
+        ok "  nuclei-kb hits: $NK_COUNT"
+      else
+        echo "- (no KB template findings)" >> "$REPORT"
       fi
     fi
   fi

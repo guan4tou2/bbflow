@@ -34,7 +34,7 @@ Try:
   tools/vps/bbvps.sh tools                      # list VPS-side tools
   tools/vps/bbvps.sh lite clearme.com           # quick recon
   tools/vps/bbvps.sh status clearme.com         # check workspace
-  H1USER=younglee_tw tools/vps/bbvps.sh xss https://target.com/?q=test
+  H1USER=guantou tools/vps/bbvps.sh xss https://target.com/?q=test
 
 Special local subcommands:
   fetch <target>    rsync remote workspaces-osmedeus/<target>/ to workshop/<target>/scan_results/osmedeus/
