@@ -96,6 +96,9 @@ export DALFOX_BLIND_URL="https://your-id.oast.pro"
 | `CURL_UA` | Chrome 125 | User-Agent string |
 | `WCD_COOKIE` | — | Cache Deception authenticated probe |
 | `REDIRECT_CANARY` | `evil.example.com` | Open redirect test domain |
+| `OOB_DURATION` | `60` | interactsh 監聽等待時間(秒) |
+| `TELEGRAM_BOT_TOKEN` | — | notify Telegram 推送 |
+| `TELEGRAM_CHAT_ID` | — | notify Telegram 頻道 |
 
 ## Per-tool 最佳實踐
 
@@ -131,3 +134,33 @@ export DALFOX_BLIND_URL="https://your-id.oast.pro"
 - **`-ko "api,admin,..."`** — deep 模式用 keyword 篩選高價值 URL
 - **`--stream`** — 邊跑邊輸出
 - **`-p 3`** — 平行查詢 3 個 provider
+
+### dnsx
+- **`-a -aaaa -cname -mx -ns -txt -soa`** — 完整 record type 枚舉
+- **`-resp`** — 顯示 DNS 回應內容
+- **`-retry 3`** — DNS 查詢重試
+
+### tlsx
+- **`-san -cn -so`** — 提取 SAN 子域名（隱藏攻擊面）
+- **`-tls-version -cipher`** — TLS 版本+密碼套件審計
+- **`-expired -self-signed -mismatched`** — 證書問題偵測
+- **`-json`** — 結構化輸出
+
+### interactsh-client
+- **`-poll-interval 5`** — 每 5 秒輪詢回調
+- **`-n 1`** — 產生 1 個互動 URL
+- **`-json`** — JSON 輸出方便解析
+
+### qsreplace
+- 搭配管線使用：`cat urls.txt | qsreplace "FUZZ"` 替換所有參數值
+- CRLF 注入：`qsreplace "%0d%0aInjected:test"`
+
+### unfurl
+- **`unfurl keys`** — 提取所有參數名稱
+- **`unfurl domains`** — 提取所有域名
+- **`unfurl paths`** — 提取所有路徑
+- **`unfurl format '%d:%P'`** — 域名:路徑映射
+
+### Hunter Chains
+- `configs/hunter-chains.sh` 定義自動串接規則
+- git-exposure→git-dumper→trufflehog、param-fuzz→crlf-inject、tls-audit SAN→subdomain 補充
