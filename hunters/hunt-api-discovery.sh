@@ -300,6 +300,14 @@ fi
 # ── Parse and categorize results ────────────────────────────────────
 log "--- categorizing results ($SCAN_TOOL) ---"
 
+# Strip ANSI escape codes and progress bar lines before parsing
+CLEAN_RAW="$OUT_DIR/${SLUG}_clean.txt"
+sed -E 's/\x1b\[[0-9;]*[a-zA-Z]//g' "$RAW" \
+  | tr '\r' '\n' \
+  | grep -vE '^\s*[0-9]+%\s*\|' \
+  | grep -vE '^\s*$' \
+  > "$CLEAN_RAW"
+
 SENSITIVE_COUNT=0
 INTERESTING_COUNT=0
 TOTAL_COUNT=0
@@ -352,7 +360,7 @@ while IFS= read -r line; do
     echo "    [${status:-???}] $url" >> "$OUT"
   fi
 
-done < "$RAW"
+done < "$CLEAN_RAW"
 
 # ── Summary ─────────────────────────────────────────────────────────
 OTHER_COUNT=$((TOTAL_COUNT - SENSITIVE_COUNT - INTERESTING_COUNT))
