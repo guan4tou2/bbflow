@@ -94,7 +94,7 @@ export DALFOX_BLIND_URL="https://your-id.oast.pro"
 
 | 變數 | 預設 | 說明 |
 |------|------|------|
-| `BBFLOW_PROFILE` | `safe` | `safe` / `deep` |
+| `BBFLOW_PROFILE` | `safe` | `safe` / `deep` / `stealth` |
 | `NUCLEI_RATE_LIMIT` | profile | 覆蓋 nuclei 速率 |
 | `KATANA_DEPTH` | profile | 覆蓋爬蟲深度 |
 | `DALFOX_BLIND_URL` | — | Blind XSS callback URL |
@@ -176,3 +176,81 @@ export DALFOX_BLIND_URL="https://your-id.oast.pro"
 ### Hunter Chains
 - `configs/hunter-chains.sh` 定義自動串接規則
 - git-exposure→git-dumper→trufflehog、param-fuzz→crlf-inject、tls-audit SAN→subdomain 補充
+
+## 工具安裝指南
+
+### Go 工具（`go install`）
+
+```bash
+# Core scanners
+go install github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest
+go install github.com/projectdiscovery/httpx/cmd/httpx@latest
+go install github.com/projectdiscovery/katana/cmd/katana@latest
+go install github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest
+go install github.com/projectdiscovery/dnsx/cmd/dnsx@latest
+go install github.com/projectdiscovery/alterx/cmd/alterx@latest
+go install github.com/projectdiscovery/tlsx/cmd/tlsx@latest
+go install github.com/projectdiscovery/cdncheck/cmd/cdncheck@latest
+go install github.com/projectdiscovery/notify/cmd/notify@latest
+go install github.com/projectdiscovery/uncover/cmd/uncover@latest
+
+# Content discovery
+go install github.com/OJ/gobuster/v3@latest
+go install github.com/dwisiswant0/crlfuzz/cmd/crlfuzz@latest
+go install github.com/d3mondev/puredns/v2@latest
+go install github.com/BishopFox/jsluice/cmd/jsluice@latest
+go install github.com/devploit/nomore403@latest
+go install github.com/sensepost/gowitness/v3@latest
+
+# XSS / param discovery
+go install github.com/hahwul/dalfox/v2@latest
+go install github.com/s0md3v/smap/cmd/smap@latest
+go install github.com/tomnomnom/unfurl@latest
+```
+
+### Python 工具（`uv tool install` 或 `pip`）
+
+```bash
+uv tool install wafw00f
+uv tool install xnLinkFinder
+uv tool install clairvoyance
+```
+
+### Binary 下載
+
+```bash
+# feroxbuster (Rust)
+curl -sL https://raw.githubusercontent.com/epi052/feroxbuster/main/install-nix.sh | bash -s ~/go/bin
+
+# kiterunner (kr)
+curl -sL https://github.com/assetnote/kiterunner/releases/download/v1.0.2/kiterunner_1.0.2_linux_amd64.tar.gz | tar xz
+mv kr ~/go/bin/
+
+# massdns (compile from source)
+git clone https://github.com/blechschmidt/massdns.git && cd massdns && make && cp bin/massdns ~/go/bin/
+```
+
+### Git clone 工具（無 package）
+
+```bash
+cd ~/Tools
+git clone https://github.com/nicholasaleks/graphw00f.git    # python3 main.py -d -t URL
+git clone https://github.com/swisskyrepo/SSRFmap.git         # python3 ssrfmap.py -r req -p param
+git clone https://github.com/initstring/cloud_enum.git       # pip install -e . && cloud_enum -k keyword
+git clone https://github.com/digininja/CeWL.git              # bundle install && ruby cewl.rb URL
+```
+
+### 版本快查
+
+```bash
+nuclei -version; httpx -version; katana -version; dalfox version
+subfinder -version; dnsx -version; alterx -version; amass -help | head -1
+cdncheck -version; puredns --version; crlfuzz -V; gobuster --version
+gowitness version; nomore403 --version; feroxbuster --version; kr version
+wafw00f -V; jsluice 2>&1 | head -1
+```
+
+### Tool Reference Docs
+
+每個工具的詳細 flag 說明、gotchas、bbflow 用法見 `docs/tools/`。
+新增工具時應先在 VPS 跑 `tool --help`，寫完 doc 再寫 hunter。

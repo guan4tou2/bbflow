@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
-# bbflow.sh — 統一 Bug Bounty Flow CLI  v2.0.0
+# bbflow.sh — 統一 Bug Bounty Flow CLI  v2.2.0
 # 零 LLM 依賴。所有 subcommand 都是 bash + curl + python3 stdlib。
+#
+# v2.2.0 (2026-06-27): +2 hunters (cloud-enum, api-discovery), +4 tools
+#   (kiterunner/cloud_enum/SSRFmap/CeWL), +21 tool docs. 68 hunters, 42 tools
 #
 # v2.1.0 (2026-06-27): +7 hunters (js-analysis, 403-bypass, waf-fingerprint,
 #   graphql-deep, screenshot, vhost-discover, subdomain-resolve), +12 tools
@@ -1126,6 +1129,8 @@ EOF
   run_hunter screenshot      "$TOOLS_DIR/hunters/hunt-screenshot.sh"        host
   run_hunter vhost-discover  "$TOOLS_DIR/hunters/hunt-vhost-discover.sh"    host
   run_hunter subdomain-resolve "$TOOLS_DIR/hunters/hunt-subdomain-resolve.sh" domain
+  run_hunter cloud-enum       "$TOOLS_DIR/hunters/hunt-cloud-enum.sh"       keyword
+  run_hunter api-discovery    "$TOOLS_DIR/hunters/hunt-api-discovery.sh"    host
   # subdomain-takeover: feed individual hostnames (dig CNAME), skip live_hosts loop
   if want takeover; then
     info "hunter: takeover (per-subdomain)"
@@ -2195,7 +2200,7 @@ cmd_dryrun() {
 
 # ── cmd: tools ────────────────────────────────────────────────
 cmd_tools() {
-  echo "${B}== bbflow v2.0.0 — Tool Inventory ==${N}"
+  echo "${B}== bbflow v2.2.0 — Tool Inventory ==${N}"
   echo ""
   local total=0 found=0
   _chk() {
@@ -2270,6 +2275,11 @@ cmd_tools() {
   echo ""
   echo "${B}Visual Recon:${N}"
   _chk gowitness  "go install github.com/sensepost/gowitness@latest"
+  echo ""
+  echo "${B}Cloud & OSINT:${N}"
+  _chk amass      "go install github.com/owasp-amass/amass/v4/...@master"
+  _chk kr         "# binary: github.com/assetnote/kiterunner/releases"
+  _chk cloud_enum "cd ~/Tools/cloud_enum && pip install -e ."
   echo ""
   echo "${B}Summary: $found/$total tools available${N}"
   echo "Profile: ${BBFLOW_PROFILE:-safe} | Hunters: $(ls "$TOOLS_DIR/hunters"/*.sh 2>/dev/null | wc -l | tr -d ' ') | Templates: $(ls "$TOOLS_DIR/templates/kb-custom"/*.yaml 2>/dev/null | wc -l | tr -d ' ')"
