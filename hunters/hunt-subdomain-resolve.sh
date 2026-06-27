@@ -44,22 +44,22 @@ section "1. Collecting Subdomain Sources"
 # bbot/subdomains.txt from prior recon
 for bbot_dir in "$OUT_DIR"/../bbot_out "$OUT_DIR"/../../bbot_out; do
   f="$bbot_dir/subdomains.txt"
-  [ -f "$f" ] && { wc -l < "$f" | xargs -I{} log "  bbot subdomains.txt: {} entries"; cat "$f" >> "$MERGED"; }
+  [ -f "$f" ] && { cnt=$(wc -l < "$f"); log "  bbot subdomains.txt: $cnt entries"; cat "$f" >> "$MERGED"; }
 done
 
 # subfinder output
 for sf in "$OUT_DIR"/../subfinder_out/"${SLUG}"*.txt "$OUT_DIR"/../../subfinder_out/"${SLUG}"*.txt; do
-  [ -f "$sf" ] && { wc -l < "$sf" | xargs -I{} log "  subfinder: {} entries ($sf)"; cat "$sf" >> "$MERGED"; }
+  [ -f "$sf" ] && { cnt=$(wc -l < "$sf"); log "  subfinder: $cnt entries ($sf)"; cat "$sf" >> "$MERGED"; }
 done
 
 # TLS SAN output from tls-audit
 for tls in "$OUT_DIR"/../tls_audit_out/"${SLUG}"*.txt "$OUT_DIR"/../../tls_audit_out/"${SLUG}"*.txt; do
-  [ -f "$tls" ] && { wc -l < "$tls" | xargs -I{} log "  tls-audit SANs: {} entries ($tls)"; cat "$tls" >> "$MERGED"; }
+  [ -f "$tls" ] && { cnt=$(wc -l < "$tls"); log "  tls-audit SANs: $cnt entries ($tls)"; cat "$tls" >> "$MERGED"; }
 done
 
 # alterx permutation output
 for ax in "$OUT_DIR"/../alterx_out/"${SLUG}"*.txt "$OUT_DIR"/../../alterx_out/"${SLUG}"*.txt; do
-  [ -f "$ax" ] && { wc -l < "$ax" | xargs -I{} log "  alterx permutations: {} entries ($ax)"; cat "$ax" >> "$MERGED"; }
+  [ -f "$ax" ] && { cnt=$(wc -l < "$ax"); log "  alterx permutations: $cnt entries ($ax)"; cat "$ax" >> "$MERGED"; }
 done
 
 # Also include any existing cleaned list from prior run
