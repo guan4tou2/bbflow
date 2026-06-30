@@ -29,6 +29,7 @@
 | `hunt-graphql-idor.sh` | **public GraphQL IDOR writeup** | 無認證 `__typename` + introspection + field suggestion + 常見 list query + integer ID IDOR 序列探測 |
 | `hunt-user-enum.sh` | **multi-brand SSO + differential response pattern** | GET/POST validate_email + password reset differential + 大小寫測試 + 20req 無 rate limit 確認 |
 | `hunt-git-exposure.sh` | **nested .git exposure via CMS subpaths** | `.git/HEAD` 多路徑探測（root + robots.txt disallow + 常見 CMS subpath）+ `.git/config` remote URL → 供應鏈分析 + `--dump` 三工具 pipeline + credential grep |
+| `hunt-dns-inventory.sh` | **DNS inventory evidence layer** | `dnsx` JSONL baseline for A/AAAA/CNAME/NS/MX/TXT/SOA + CNAME/NS takeover candidate hints. **Not a Finding generator**; output must feed takeover/subzy/nuclei/manual claimability validation. |
 | `hunt-subdomain-takeover.sh` | **CNAME → vendor fingerprint** | CNAME lookup + 20+ vendor fingerprint（S3/GitHub Pages/Heroku/Shopify/Fastly/Azure/Bitbucket/...）+ claimability 判斷 |
 | `hunt-open-redirect.sh` | **OAuth redirect_uri chain (public pattern)**（OAuth token theft chain）| 20 個 redirect param name × 9 種 bypass 變體（arbitrary/protocol-relative/backslash/ampersand/subdomain/userinfo...）+ 對常見 OAuth/logout 路徑測試 |
 | `hunt-jwt.sh` | **generic** | JWT decode + alg:none / empty sig endpoint 測試 + HS256 weak secret brute + exp 狀態 + kid/jku/x5u injection surface + alg confusion |

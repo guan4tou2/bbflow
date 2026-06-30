@@ -258,7 +258,8 @@ bbflow hunt example.com --only nuclei,nuclei-secrets,nuclei-panels,nuclei-wp
 | | open-redirect | redirect param + bypass 變體 | ⭐⭐ |
 | | mcp-oauth | MCP OAuth scope 差異 | ⭐⭐⭐ |
 | | hybris-occ | SAP Hybris default OAuth | ⭐⭐⭐ |
-| **Takeover** | takeover | CNAME → vendor fingerprint | ⭐⭐⭐ |
+| **Takeover** | dns-inventory | dnsx JSONL DNS evidence + takeover hints | ⭐⭐⭐ |
+| | takeover | CNAME → vendor fingerprint | ⭐⭐⭐ |
 | | nxdomain | 歷史 hostname superset | ⭐⭐ |
 | **Google** | gkey | Maps/Vision/Translate unrestricted | ⭐⭐⭐ |
 | **Fuzzing** | crawl-chain | 10 階段完整鏈 | ⭐⭐⭐⭐ |

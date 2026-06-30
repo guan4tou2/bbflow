@@ -1131,6 +1131,30 @@ EOF
   run_hunter subdomain-resolve "$TOOLS_DIR/hunters/hunt-subdomain-resolve.sh" domain
   run_hunter cloud-enum       "$TOOLS_DIR/hunters/hunt-cloud-enum.sh"       keyword
   run_hunter api-discovery    "$TOOLS_DIR/hunters/hunt-api-discovery.sh"    host
+  # dns-inventory: canonical DNS evidence layer (dnsx JSONL + takeover candidate hints)
+  if want dns-inventory; then
+    info "hunter: dns-inventory"
+    local OH="$DIR/hunters/dns-inventory"
+    mkdir -p "$OH"
+    export OUT_DIR="$OH"
+    echo "" >> "$REPORT"; echo "## dns-inventory" >> "$REPORT"
+    local INPUT_FILE=""
+    if [ -f "$DIR/bbot/subdomains.txt" ]; then
+      INPUT_FILE="$DIR/bbot/subdomains.txt"
+    else
+      INPUT_FILE="$OH/live_hosts_as_domains.txt"
+      sed -E 's|^https?://||; s|/.*$||; s|:.*$||' "$LIVE" | sort -u > "$INPUT_FILE"
+    fi
+    "$TOOLS_DIR/hunters/hunt-dns-inventory.sh" -f "$INPUT_FILE" 2>/dev/null || true
+    local CANDIDATE_FILE
+    CANDIDATE_FILE=$(ls "$OH"/*_takeover_candidates.tsv 2>/dev/null | head -1 || true)
+    if [ -n "$CANDIDATE_FILE" ] && [ -s "$CANDIDATE_FILE" ]; then
+      echo "- $(wc -l < "$CANDIDATE_FILE" | tr -d ' ') DNS takeover candidate hints → $CANDIDATE_FILE" >> "$REPORT"
+      echo "- These are not Findings; run takeover/subzy/nuclei/manual claimability validation next." >> "$REPORT"
+    else
+      echo "- (no DNS takeover candidate hints)" >> "$REPORT"
+    fi
+  fi
   # subdomain-takeover: feed individual hostnames (dig CNAME), skip live_hosts loop
   if want takeover; then
     info "hunter: takeover (per-subdomain)"
@@ -1138,7 +1162,14 @@ EOF
     mkdir -p "$OH"
     export OUT_DIR="$OH"
     echo "" >> "$REPORT"; echo "## takeover" >> "$REPORT"
-    if [ -f "$DIR/bbot/subdomains.txt" ]; then
+    local DNS_INV_CANDIDATES
+    DNS_INV_CANDIDATES=$(ls "$DIR"/hunters/dns-inventory/*_takeover_candidates.tsv 2>/dev/null | head -1 || true)
+    if [ -n "$DNS_INV_CANDIDATES" ] && [ -s "$DNS_INV_CANDIDATES" ]; then
+      cut -f1 "$DNS_INV_CANDIDATES" | sort -u | while read -r SUB; do
+        [ -z "$SUB" ] && continue
+        "$TOOLS_DIR/hunters/hunt-subdomain-takeover.sh" "$SUB" 2>/dev/null || true
+      done
+    elif [ -f "$DIR/bbot/subdomains.txt" ]; then
       "$TOOLS_DIR/hunters/hunt-subdomain-takeover.sh" -f "$DIR/bbot/subdomains.txt" 2>/dev/null || true
     else
       while read -r H; do
@@ -1742,6 +1773,7 @@ cmd_test() {
   test_h open-redirect "$TOOLS_DIR/hunters/hunt-open-redirect.sh"         "https://example.com"
   test_h takeover      "$TOOLS_DIR/hunters/hunt-subdomain-takeover.sh"    "nonexistent-subdomain.example.com"
   test_h nxdomain      "$TOOLS_DIR/hunters/hunt-nxdomain-corpus.sh"       "example.com"
+  test_h dns-inventory "$TOOLS_DIR/hunters/hunt-dns-inventory.sh"         "example.com"
   test_h gkey          "$TOOLS_DIR/hunters/hunt-google-api-key.sh"        "AIzaSyFAKEKEY_ForSmokeTest_AAAAAAAAAAAAA"
   test_h arjun-params  "$TOOLS_DIR/hunters/hunt-arjun-params.sh"          "https://example.com"
   test_h config-leak   "$TOOLS_DIR/hunters/hunt-config-leak.sh"           "https://example.com"
@@ -1750,7 +1782,7 @@ cmd_test() {
   # param-fuzz / dalfox-xss / trufflehog / portscan: require external tools or network access
   # — skipped in null-case regression; run manually: bbflow hunt --only param-fuzz,portscan target
   rm -rf "$TMP"
-  local TOTAL=20
+  local TOTAL=21
   echo ""
   if [ "$FAIL" = "0" ]; then
     ok "all $TOTAL null-case hunters passed (0 FP on example.com)"

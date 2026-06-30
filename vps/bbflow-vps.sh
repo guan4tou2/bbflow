@@ -7,6 +7,7 @@ set -uo pipefail
 
 OUT="${HOME}/workspaces-osmedeus"
 mkdir -p "$OUT"
+DNSX_RESOLVERS="${DNSX_RESOLVERS:-1.1.1.1,8.8.8.8,9.9.9.9}"
 
 sub="${1:-help}"
 TARGET="${2:-}"
@@ -36,7 +37,8 @@ RECON WORKFLOWS (uses Osmedeus under the hood)
   single <url>         Single URL analysis flow
 
 SPECIALIZED SUB-TOOLS
-  takeover <domain>    subjack + nuclei takeover templates on subs from lite run
+  dns-inventory <domain|file>  dnsx JSONL DNS inventory + candidate hints
+  takeover <domain>    dnsx inventory + subjack + nuclei takeovers on subs from lite run
   s3 <bucket>          s3scanner on explicit bucket
   crawl <url>          hakrawler + gau + waybackurls piped through uro
   params <url>         x8 hidden param fuzzer (Rust)
@@ -98,25 +100,63 @@ EOF
 
   takeover)
     need_target
-    mkdir -p "$OUT/$TARGET/takeover"
     if [ -f "$TARGET" ]; then
       subs="$TARGET"
+      out_base="$OUT/_file_$(basename "$TARGET" | sed 's/[^A-Za-z0-9_.-]/_/g')"
     else
       subs="$OUT/$TARGET/subdomain/subdomain-$TARGET.txt"
+      out_base="$OUT/$TARGET"
     fi
     if [ ! -f "$subs" ]; then
       echo "No subs file at $subs — run 'bbflow.sh lite $TARGET' first or pass a .txt file as target"
       exit 1
     fi
+    mkdir -p "$out_base/takeover"
+    if command -v dnsx >/dev/null 2>&1; then
+      banner "dnsx inventory on $(wc -l < "$subs") subdomains"
+      dnsx -l "$subs" -silent -j -resolver "$DNSX_RESOLVERS" -a -aaaa -cname -ns -mx -txt -soa -resp \
+        -o "$out_base/takeover/dnsx.jsonl" || true
+      grep -Ei 's3|amazonaws|github\.io|heroku|myshopify|trafficmanager|azurewebsites|cloudapp|fastly|pantheon|surge|wordpress|tumblr|zendesk|unbounce|ghost|thinkific|readme|uservoice' \
+        "$out_base/takeover/dnsx.jsonl" > "$out_base/takeover/dnsx_takeover_hints.jsonl" 2>/dev/null || true
+    else
+      echo "dnsx not found — skipping inventory layer"
+    fi
     banner "subjack on $(wc -l < "$subs") subdomains"
-    subjack -w "$subs" -t 100 -timeout 10 -ssl -v -o "$OUT/$TARGET/takeover/subjack.txt" || true
+    subjack -w "$subs" -t 100 -timeout 10 -ssl -v -o "$out_base/takeover/subjack.txt" || true
     banner "nuclei takeover templates"
     nuclei -l "$subs" -t ~/nuclei-templates/http/takeovers/ \
       ${H1USER:+-H "X-Bug-Bounty: HackerOne-$H1USER"} \
-      -silent -o "$OUT/$TARGET/takeover/nuclei.txt" || true
+      -silent -o "$out_base/takeover/nuclei.txt" || true
     echo ""
     echo "=== Results ==="
-    wc -l "$OUT/$TARGET/takeover/"*.txt 2>/dev/null
+    wc -l "$out_base/takeover/"*.txt "$out_base/takeover/"*.jsonl 2>/dev/null
+    ;;
+
+  dns-inventory)
+    need_target
+    if [ -f "$TARGET" ]; then
+      subs="$TARGET"
+      out_base="$OUT/_file_$(basename "$TARGET" | sed 's/[^A-Za-z0-9_.-]/_/g')"
+    else
+      subs="$OUT/$TARGET/subdomain/subdomain-$TARGET.txt"
+      out_base="$OUT/$TARGET"
+    fi
+    if [ ! -f "$subs" ]; then
+      echo "No subs file at $subs — run 'bbflow.sh lite $TARGET' first or pass a .txt file as target"
+      exit 1
+    fi
+    mkdir -p "$out_base/dns-inventory"
+    if ! command -v dnsx >/dev/null 2>&1; then
+      echo "dnsx not found"
+      exit 1
+    fi
+    banner "dnsx inventory on $(wc -l < "$subs") subdomains"
+    dnsx -l "$subs" -silent -j -resolver "$DNSX_RESOLVERS" -a -aaaa -cname -ns -mx -txt -soa -resp \
+      -o "$out_base/dns-inventory/dnsx.jsonl" || true
+    grep -Ei 's3|amazonaws|github\.io|heroku|myshopify|trafficmanager|azurewebsites|cloudapp|fastly|pantheon|surge|wordpress|tumblr|zendesk|unbounce|ghost|thinkific|readme|uservoice' \
+      "$out_base/dns-inventory/dnsx.jsonl" > "$out_base/dns-inventory/takeover_hints.jsonl" 2>/dev/null || true
+    echo "inventory: $out_base/dns-inventory/dnsx.jsonl"
+    echo "takeover hints: $(wc -l < "$out_base/dns-inventory/takeover_hints.jsonl" 2>/dev/null | tr -d ' ')"
     ;;
 
   s3)

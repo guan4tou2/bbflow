@@ -1,9 +1,9 @@
 ---
 type: wiki
 category: attack
-tool: subzy,dnsreaper,nuclei
+tool: dnsx,subzy,dnsreaper,nuclei
 status: active
-last-updated: 2026-04-21
+last-updated: 2026-06-30
 ---
 
 # Subdomain / Cloud Takeover 深度（2026 版）
@@ -27,6 +27,27 @@ last-updated: 2026-04-21
 
 ## 1. 找候選
 
+### 1.0 Tool layering
+
+Do not treat every takeover tool as the same layer:
+
+| Layer | Tool | Role |
+|---|---|---|
+| DNS inventory | `dnsx` / `hunt-dns-inventory.sh` | Canonical DNS evidence: A/AAAA/CNAME/NS/MX/TXT/SOA, wildcard-aware baseline, JSONL output. |
+| Fast takeover check | `subzy`, `nuclei http/takeovers` | Provider response fingerprints for known takeover services. |
+| Secondary corroboration | `dnsReaper` | Broader signature set; useful after dependency hardening, but not a final proof. |
+| Final validation | manual provider claimability check | Proves the backing resource can actually be claimed. Required before reporting. |
+
+bbflow default flow:
+
+```text
+subdomains.txt
+  -> dns-inventory (dnsx JSONL + hints)
+  -> takeover / subzy / nuclei takeover templates
+  -> manual claimability validation
+  -> Finding only after control or provider-specific claim proof
+```
+
 ### 1.1 DNS 枚舉全 subdomain
 
 ```bash
@@ -48,6 +69,9 @@ curl -s "https://crt.sh/?q=%25.target.com&output=json" | jq -r '.[].name_value' 
 ```bash
 # dnsx 查 CNAME
 cat all.txt | dnsx -cname -resp -silent | tee cnames.txt
+
+# bbflow canonical inventory (JSONL + candidate TSV)
+bbflow hunt target.com --only dns-inventory
 
 # 抓出指向外部的 CNAME
 grep -E 'cname.*(s3|azurewebsites|cloudapp|herokuapp|herokussl|github\.io|netlify|vercel|pantheon|elasticbeanstalk|fastly)' cnames.txt

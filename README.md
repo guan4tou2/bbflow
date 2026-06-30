@@ -335,7 +335,7 @@ Bundled binaries：
 
 ---
 
-## 47 個 Hunters
+## Hunters
 
 | Hunter | 用途 | 案例 |
 |---|---|---|
@@ -347,6 +347,7 @@ Bundled binaries：
 | `graphql` | 無認證 + introspection + integer IDOR | GraphQL IDOR ✅ |
 | `userenum` | validate_email differential + rate limit | multi-brand / differential |
 | `git-exposure` | `.git` 多路徑 + remote URL + `--dump` | nested .git CMS ✅ |
+| `dns-inventory` | `dnsx` JSONL DNS evidence + takeover hints | baseline before takeover validation |
 | `takeover` | CNAME + 20+ vendor fingerprint | CNAME fingerprint |
 | `open-redirect` | 20 param × 9 bypass + OAuth chain | OAuth redirect_uri chain |
 | `jwt` | decode + alg:none + weak HS256 + kid/jku | generic |

@@ -72,6 +72,7 @@ bbflow nuclei-update                  # 更新 PD templates + Wordfence CVE
 | `hunt-graphql-idor.sh` | 無認證 `__typename` + introspection + field suggestion + list query + integer ID IDOR | public GraphQL IDOR writeup ✅ 實測重現 |
 | `hunt-user-enum.sh` | GET/POST validate_email differential + password reset + 20-req rate limit | multi-brand SSO / differential response pattern |
 | `hunt-git-exposure.sh` | `.git/HEAD` 多路徑探測 + remote URL → 供應鏈 + `--dump` 三工具 + credential grep | nested .git via CMS subpaths ✅ 實測重現 |
+| `hunt-dns-inventory.sh` | `dnsx` JSONL DNS baseline（A/AAAA/CNAME/NS/MX/TXT/SOA）+ takeover candidate hints；只產生 `needs_manual_validation` 候選 | DNS evidence layer before takeover verification |
 | `hunt-subdomain-takeover.sh` | CNAME → 20+ vendor fingerprint + claimability 判斷 | CNAME → vendor fingerprint |
 | `hunt-open-redirect.sh` | 20 redirect param × 9 bypass 變體 + 常見 OAuth/logout 路徑 | OAuth redirect_uri chain (public pattern) |
 | `hunt-jwt.sh` | JWT decode + alg:none + weak HS256 + exp + kid/jku injection | generic |

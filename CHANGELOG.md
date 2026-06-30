@@ -8,6 +8,11 @@ versioning follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased] — 2026-05-20
 
 ### Added
+- `hunt-dns-inventory.sh`: a `dnsx`-first DNS evidence layer that writes JSONL
+  for A/AAAA/CNAME/NS/MX/TXT/SOA and emits takeover candidate hints as
+  `needs_manual_validation` TSV rows. This is intentionally not a Finding
+  generator; takeover scanners and manual provider claimability checks remain
+  the reporting gate.
 - External scope v1 contract: `scope.yaml` / `scope.json` with `schema_version: 1`,
   `in_scope`, `out_of_scope`, `scan_level`, and `rate_limit`. `bbflow` preserves the
   original scope file, generates a normalized `SCOPE.md`, and writes
@@ -31,6 +36,11 @@ versioning follows [Semantic Versioning](https://semver.org/).
   uses `BBFLOW_REMOTE_ROOT` (default `~/bbflow`) instead of a Vault/workspace-specific path.
 - README and wiki now document the v1 automation contract, deployment baseline,
   standalone runtime boundary, and wiki sanitization gate.
+- `bbflow hunt --only dns-inventory` now runs as the canonical DNS inventory
+  stage, and `takeover` consumes its candidate list when available before
+  falling back to full subdomain input.
+- VPS `bbflow-vps.sh takeover` now writes a `dnsx.jsonl` inventory and a filtered
+  takeover-hints JSONL before running subjack and nuclei takeover templates.
 
 ## [1.5.0] — 2026-04-29
 
