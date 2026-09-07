@@ -1,0 +1,98 @@
+id: bb-gateway-internal-ip-disclosure
+
+info:
+  name: Internal IP Disclosure via Gateway Redirect/WADL
+  author: guan4tou2
+  severity: low
+  description: |
+    Public gateway or reverse proxy leaks internal RFC-1918 IP addresses and
+    ports in redirect Location headers or WADL/API-description response bodies.
+    Typical on JBoss/Wildfly gateways where /console redirects to the admin
+    console on an internal IP:port, or OPTIONS on an API path returns a WADL
+    with an internal base URL.  CWE-200.
+  reference:
+    - https://cwe.mitre.org/data/definitions/200.html
+    - https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/01-Information_Gathering/04-Enumerate_Applications_on_Webserver
+  classification:
+    cwe-id: CWE-200
+  metadata:
+    source-pattern: "Pattern - Internal IP Disclosure via Gateway"
+    lifecycle: "validate+null-case OK; canary+FP pending"
+    backlog-id: H-003
+  tags: bb-recon,disclosure,internal-ip,gateway,cwe-200
+
+variables:
+  rfc1918: "(10\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}|172\\.(1[6-9]|2[0-9]|3[01])\\.\\d{1,3}\\.\\d{1,3}|192\\.168\\.\\d{1,3}\\.\\d{1,3})"
+
+http:
+  # --- Probe 1: redirect paths that commonly leak internal IP in Location ---
+  - method: GET
+    path:
+      - "{{BaseURL}}/console"
+      - "{{BaseURL}}/management"
+      - "{{BaseURL}}/admin"
+      - "{{BaseURL}}/manager"
+
+    redirects: false
+    max-redirects: 0
+    stop-at-first-match: true
+
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 301
+          - 302
+          - 303
+          - 307
+          - 308
+
+      - type: regex
+        part: header
+        regex:
+          - "(?i)Location:\\s*https?://(10\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}|172\\.(1[6-9]|2[0-9]|3[01])\\.\\d{1,3}\\.\\d{1,3}|192\\.168\\.\\d{1,3}\\.\\d{1,3})(:\\d{1,5})?"
+
+    extractors:
+      - type: regex
+        name: leaked_ip_port
+        group: 0
+        regex:
+          - "(?i)Location:\\s*https?://((?:10|172\\.(?:1[6-9]|2[0-9]|3[01])|192\\.168)\\.\\d{1,3}\\.\\d{1,3}(?::\\d{1,5})?)"
+        part: header
+
+  # --- Probe 2: OPTIONS on API paths returning WADL/Swagger with internal base URL ---
+  - method: OPTIONS
+    path:
+      - "{{BaseURL}}/api"
+      - "{{BaseURL}}/api/v1"
+      - "{{BaseURL}}/api/v2"
+      - "{{BaseURL}}/services"
+
+    stop-at-first-match: true
+
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+
+      - type: word
+        part: body
+        condition: or
+        words:
+          - "<resources base="
+          - "wadl"
+          - "basePath"
+
+      - type: regex
+        part: body
+        regex:
+          - "https?://(10\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}|172\\.(1[6-9]|2[0-9]|3[01])\\.\\d{1,3}\\.\\d{1,3}|192\\.168\\.\\d{1,3}\\.\\d{1,3})(:\\d{1,5})?"
+
+    extractors:
+      - type: regex
+        name: leaked_ip_port
+        group: 0
+        regex:
+          - "https?://((?:10|172\\.(?:1[6-9]|2[0-9]|3[01])|192\\.168)\\.\\d{1,3}\\.\\d{1,3}(?::\\d{1,5})?)"
+        part: body

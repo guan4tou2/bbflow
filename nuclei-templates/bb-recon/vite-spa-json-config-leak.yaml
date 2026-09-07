@@ -1,0 +1,84 @@
+id: bb-vite-spa-json-config-leak
+
+info:
+  name: Vite SPA Runtime JSON Config Leak
+  author: guan4tou2
+  severity: medium
+  description: |
+    Vite-based SPA applications often place runtime environment configuration
+    as JSON files at public static paths (/json/, /config/, /env/). These files
+    can expose the full environment map (dev/uat/production API URLs), tenant
+    slugs, business constants, and sometimes hardcoded secrets (CWE-200).
+  reference:
+    - https://vitejs.dev/guide/env-and-mode.html
+    - https://cwe.mitre.org/data/definitions/200.html
+  classification:
+    cwe-id: CWE-200
+    cvss-metrics: CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N
+    cvss-score: 5.3
+  metadata:
+    source-pattern: "Pattern - Vite SPA JSON Config Leak"
+    lifecycle: "validate+null-case OK; canary+FP pending"
+    backlog-entry: H-002
+  tags: bb-recon,vite,spa,config-leak,cwe-200,info-disclosure
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/json/production.json"
+      - "{{BaseURL}}/json/version_pmo.json"
+      - "{{BaseURL}}/json/uat.json"
+      - "{{BaseURL}}/json/develop.json"
+      - "{{BaseURL}}/json/test.json"
+      - "{{BaseURL}}/json/config.json"
+      - "{{BaseURL}}/json/env.json"
+      - "{{BaseURL}}/json/portal.json"
+      - "{{BaseURL}}/config/production.json"
+      - "{{BaseURL}}/config/env.json"
+      - "{{BaseURL}}/config/app.json"
+      - "{{BaseURL}}/env/production.json"
+      - "{{BaseURL}}/env/config.json"
+
+    stop-at-first-match: false
+
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+
+      - type: word
+        part: header
+        words:
+          - "application/json"
+
+      - type: regex
+        part: body
+        condition: or
+        regex:
+          # Environment map dispatcher: JSON with multiple env names as keys
+          - '"(uat|staging|develop|dev|test|production|prod|portal)":\s*"[a-zA-Z0-9.\-]+'
+          # API base URL key patterns from Vite SPA env config
+          - '"(BASE_API|apiBaseUrl|baseUrl|API_URL|API_BASE|API_HOST)":\s*"https?://'
+          # VITE_ prefixed runtime keys (strong Vite signal)
+          - '"VITE_[A-Z0-9_]{2,}":\s*"[^"]{2,}"'
+          # ENV field with environment name value
+          - '"ENV":\s*"(production|staging|uat|develop|dev|test)"'
+
+      - type: dsl
+        dsl:
+          # Require a non-trivial JSON body (not an empty object or tiny stub)
+          - 'len(body) > 50'
+
+    extractors:
+      - type: regex
+        name: env_keys
+        regex:
+          - '"(BASE_API|apiBaseUrl|baseUrl|API_URL|API_BASE|ENV|VITE_[A-Z0-9_]+)":\s*"([^"]+)"'
+        part: body
+
+      - type: regex
+        name: env_map_entries
+        regex:
+          - '"(uat|staging|develop|dev|test|production|prod|portal)":\s*"([^"]+)"'
+        part: body
