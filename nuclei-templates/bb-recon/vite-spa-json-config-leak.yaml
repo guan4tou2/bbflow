@@ -18,7 +18,7 @@ info:
     cvss-score: 5.3
   metadata:
     source-pattern: "Pattern - Vite SPA JSON Config Leak"
-    lifecycle: "validate+null-case OK; canary+FP pending"
+    lifecycle: "promoted — validate+null-case+canary OK (19 targets 0 FP, simulated TP 2 matches)"
     backlog-entry: H-002
   tags: bb-recon,vite,spa,config-leak,cwe-200,info-disclosure
 

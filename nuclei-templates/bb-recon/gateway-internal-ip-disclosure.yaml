@@ -17,7 +17,7 @@ info:
     cwe-id: CWE-200
   metadata:
     source-pattern: "Pattern - Internal IP Disclosure via Gateway"
-    lifecycle: "validate+null-case OK; canary+FP pending"
+    lifecycle: "promoted — validate+null-case+canary OK (19 targets 0 FP, simulated TP 1 match)"
     backlog-id: H-003
   tags: bb-recon,disclosure,internal-ip,gateway,cwe-200
 
