@@ -1,0 +1,49 @@
+id: apereo-cas-execution-stacktrace
+
+info:
+  name: Apereo CAS execution Parameter Stack Trace Disclosure
+  author: guan4tou2
+  severity: low
+  description: |
+    Apereo CAS with an unvalidated Spring WebFlow `execution` parameter returns a
+    stack trace when given a malformed value, disclosing CAS/Spring version, server
+    paths, and possibly configuration (CWE-209).
+  reference:
+    - https://cwe.mitre.org/data/definitions/209.html
+  classification:
+    cwe-id: CWE-209
+  metadata:
+    source-pattern: "Pattern - Apereo CAS Stack Trace Leak"
+    lifecycle: "validate+null-case OK; canary+FP pending before promote"
+    verified: false
+  tags: apereo,cas,spring-webflow,stacktrace,exposure,cwe-209
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/cas/login?execution=INVALID_KEY_FORMAT&_eventId=submit"
+
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        condition: or
+        words:
+          - "org.springframework.webflow"
+          - "NoSuchFlowExecutionException"
+          - "FlowExecutionRepositoryException"
+          - "BadlyFormattedFlowExecutionKeyException"
+      - type: word
+        part: body
+        condition: and
+        words:
+          - "Exception"
+          - "at org."
+
+    extractors:
+      - type: regex
+        part: body
+        name: version
+        regex:
+          - "CAS [0-9]+\\.[0-9]+\\.[0-9]+"
+          - "spring-webflow-[0-9.]+"
